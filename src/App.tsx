@@ -140,6 +140,9 @@ export function App() {
         rememberGeminiApiKey={settings.rememberGeminiApiKey}
         openAiApiKey={settings.openAiApiKey}
         rememberOpenAiApiKey={settings.rememberOpenAiApiKey}
+        azureApiKey={settings.azureApiKey}
+        azureRegion={settings.azureRegion}
+        rememberAzureApiKey={settings.rememberAzureApiKey}
         selectedSoundFirstModelId={soundFirst.selectedModelId}
         onSaveApiKey={settings.saveApiKey}
         onDeleteApiKey={settings.deleteApiKey}

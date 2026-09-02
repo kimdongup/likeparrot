@@ -15,10 +15,13 @@ import {
 import { downloadTranscriptHtml } from '../services/transcriptExport';
 import {
   applyThemePreference,
+  deleteStoredAzureRegion,
   deleteStoredProviderApiKey,
   readStoredApiKey,
+  readStoredAzureRegion,
   readStoredProviderApiKey,
   readStoredTheme,
+  saveStoredAzureRegion,
   saveStoredProviderApiKey,
   saveStoredTheme,
 } from '../services/preferences';
@@ -94,12 +97,16 @@ export interface LikeParrotController {
     rememberGeminiApiKey: boolean;
     openAiApiKey: string;
     rememberOpenAiApiKey: boolean;
+    azureApiKey: string;
+    azureRegion: string;
+    rememberAzureApiKey: boolean;
     theme: ThemePreference;
     close: () => void;
     saveApiKey: (
       provider: ApiKeyProvider,
       apiKey: string,
-      rememberOnDevice: boolean
+      rememberOnDevice: boolean,
+      auxiliaryValue?: string
     ) => boolean;
     deleteApiKey: (provider: ApiKeyProvider) => boolean;
     changeTheme: (theme: ThemePreference) => void;
@@ -186,6 +193,7 @@ const getApiStorageError = (
 const derivePipelineStatus = (
   selections: PipelineSelections,
   apiKey: string,
+  azureApiKey = '',
   latencyMs = 0,
   actualEngineType?: PipelineEngineType
 ): PipelineStatus => {
@@ -196,10 +204,12 @@ const derivePipelineStatus = (
     engineType = 'gemini_stream';
   } else if (selections.stage2 === 'turbo_fastpath') {
     engineType = 'network_fallback';
-  } else if (BuiltInTranslator.isChromeNanoSupported()) {
+  } else if (BuiltInTranslator.isBrowserTranslatorSupported()) {
     engineType = 'chrome_nano';
   } else if (apiKey) {
     engineType = 'gemini_stream';
+  } else if (azureApiKey) {
+    engineType = 'network_fallback';
   }
 
   if (actualEngineType) engineType = actualEngineType;
@@ -222,18 +232,35 @@ export function useLikeParrotController(): LikeParrotController {
 
   const [initialApiKeyRead] = useState(readStoredApiKey);
   const [initialOpenAiApiKeyRead] = useState(() => readStoredProviderApiKey('openai'));
+  const [initialAzureApiKeyRead] = useState(() => readStoredProviderApiKey('azure'));
+  const [initialAzureRegionRead] = useState(readStoredAzureRegion);
   const [initialSoundFirstModel] = useState(getStoredSoundFirstModel);
   const [initialSelections] = useState(() => {
     const storedSelections = getStoredSelections();
-    return storedSelections.stage2 === 'gemini_stream' && !initialApiKeyRead.apiKey
-      ? { ...storedSelections, stage2: 'auto' as const }
-      : storedSelections;
+    if (
+      storedSelections.stage2 === 'chrome_nano' &&
+      !BuiltInTranslator.isBrowserTranslatorSupported()
+    ) {
+      return { ...storedSelections, stage2: 'auto' as const };
+    }
+    if (storedSelections.stage2 === 'gemini_stream' && !initialApiKeyRead.apiKey) {
+      return { ...storedSelections, stage2: 'auto' as const };
+    }
+    if (storedSelections.stage2 === 'turbo_fastpath' && !initialAzureApiKeyRead.apiKey) {
+      return { ...storedSelections, stage2: 'auto' as const };
+    }
+    return storedSelections;
   });
   const [apiKey, setApiKey] = useState(initialApiKeyRead.apiKey);
   const [rememberApiKey, setRememberApiKey] = useState(initialApiKeyRead.persistent);
   const [openAiApiKey, setOpenAiApiKey] = useState(initialOpenAiApiKeyRead.apiKey);
   const [rememberOpenAiApiKey, setRememberOpenAiApiKey] = useState(
     initialOpenAiApiKeyRead.persistent
+  );
+  const [azureApiKey, setAzureApiKey] = useState(initialAzureApiKeyRead.apiKey);
+  const [azureRegion, setAzureRegion] = useState(initialAzureRegionRead.apiKey);
+  const [rememberAzureApiKey, setRememberAzureApiKey] = useState(
+    initialAzureApiKeyRead.persistent
   );
   const [soundFirstModelId, setSoundFirstModelId] = useState<SoundFirstModelId>(
     initialSoundFirstModel
@@ -261,7 +288,11 @@ export function useLikeParrotController(): LikeParrotController {
   const [cards, setCards] = useState<TranslationCard[]>([]);
   const [playingCardId, setPlayingCardId] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>(() =>
-    derivePipelineStatus(initialSelections, initialApiKeyRead.apiKey)
+    derivePipelineStatus(
+      initialSelections,
+      initialApiKeyRead.apiKey,
+      initialAzureApiKeyRead.apiKey
+    )
   );
 
   const recognizerRef = useRef<WebSpeechRecognizer | null>(null);
@@ -269,6 +300,8 @@ export function useLikeParrotController(): LikeParrotController {
   const sourceLangRef = useRef(sourceLang);
   const targetLangRef = useRef(targetLang);
   const apiKeyRef = useRef(apiKey);
+  const azureApiKeyRef = useRef(azureApiKey);
+  const azureRegionRef = useRef(azureRegion);
   const soundFirstModelIdRef = useRef(soundFirstModelId);
   const selectionsRef = useRef(selections);
   const isAllInOnePageRef = useRef(isAllInOnePage);
@@ -386,6 +419,11 @@ export function useLikeParrotController(): LikeParrotController {
   useEffect(() => {
     apiKeyRef.current = apiKey;
   }, [apiKey]);
+
+  useEffect(() => {
+    azureApiKeyRef.current = azureApiKey;
+    azureRegionRef.current = azureRegion;
+  }, [azureApiKey, azureRegion]);
 
   useEffect(() => {
     soundFirstModelIdRef.current = soundFirstModelId;
@@ -535,6 +573,10 @@ export function useLikeParrotController(): LikeParrotController {
       const currentTarget = targetLangRef.current;
       const currentSelections = selectionsRef.current;
       const currentKey = apiKeyRef.current;
+      const currentAzureCredentials = {
+        apiKey: azureApiKeyRef.current,
+        region: azureRegionRef.current,
+      };
 
       const processTranslation = async () => {
         if (generation !== pipelineGenerationRef.current) return;
@@ -552,6 +594,7 @@ export function useLikeParrotController(): LikeParrotController {
             currentTarget.name,
             currentTarget.code,
             currentKey,
+            currentAzureCredentials,
             (_chunk, accumulated) => {
               if (generation === pipelineGenerationRef.current) {
                 setStreamingTranslation(accumulated);
@@ -605,6 +648,7 @@ export function useLikeParrotController(): LikeParrotController {
             derivePipelineStatus(
               currentSelections,
               currentKey,
+              currentAzureCredentials.apiKey,
               endToEndLatencyMs,
               result.engineType
             )
@@ -688,11 +732,27 @@ export function useLikeParrotController(): LikeParrotController {
 
   const handleSelectionChange = useCallback((nextSelections: PipelineSelections) => {
     if (
+      nextSelections.stage2 === 'chrome_nano' &&
+      selectionsRef.current.stage2 !== 'chrome_nano' &&
+      !BuiltInTranslator.isBrowserTranslatorSupported()
+    ) {
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.browserTranslatorUnavailable);
+      return;
+    }
+    if (
       nextSelections.stage2 === 'gemini_stream' &&
       selectionsRef.current.stage2 !== 'gemini_stream' &&
       !apiKey.trim()
     ) {
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.geminiApiKeyRequired);
+      return;
+    }
+    if (
+      nextSelections.stage2 === 'turbo_fastpath' &&
+      selectionsRef.current.stage2 !== 'turbo_fastpath' &&
+      !azureApiKey.trim()
+    ) {
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.azureApiKeyRequired);
       return;
     }
     stopWorkflow();
@@ -704,8 +764,8 @@ export function useLikeParrotController(): LikeParrotController {
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.savePipeline);
     }
     setSelections(nextSelections);
-    setPipelineStatus(derivePipelineStatus(nextSelections, apiKey));
-  }, [apiKey, stopWorkflow]);
+    setPipelineStatus(derivePipelineStatus(nextSelections, apiKey, azureApiKey));
+  }, [apiKey, azureApiKey, stopWorkflow]);
 
   const handleSoundFirstModelChange = useCallback((modelId: SoundFirstModelId) => {
     const model = getSoundFirstModel(modelId);
@@ -734,35 +794,60 @@ export function useLikeParrotController(): LikeParrotController {
   const handleSaveApiKey = useCallback((
     provider: ApiKeyProvider,
     key: string,
-    rememberOnDevice: boolean
+    rememberOnDevice: boolean,
+    auxiliaryValue = ''
   ): boolean => {
     const cleanKey = key.trim();
-    const status = saveStoredProviderApiKey(provider, cleanKey, rememberOnDevice);
-    const sessionSaved = status !== 'session-failed'
-      && status !== 'session-and-legacy-failed';
+    const keyStatus = saveStoredProviderApiKey(provider, cleanKey, rememberOnDevice);
+    const regionStatus = provider === 'azure'
+      ? saveStoredAzureRegion(auxiliaryValue, rememberOnDevice)
+      : 'success';
+    const status = keyStatus !== 'success' ? keyStatus : regionStatus;
+    const sessionSaved = ![keyStatus, regionStatus].some(
+      (value) => value === 'session-failed' || value === 'session-and-legacy-failed'
+    );
     if (sessionSaved) {
       if (provider === 'gemini') {
         setApiKey(cleanKey);
-        setRememberApiKey(status === 'legacy-cleanup-failed'
+        setRememberApiKey(keyStatus === 'legacy-cleanup-failed'
           ? rememberApiKey
           : rememberOnDevice);
-      } else {
+      } else if (provider === 'openai') {
         setOpenAiApiKey(cleanKey);
-        setRememberOpenAiApiKey(status === 'legacy-cleanup-failed'
+        setRememberOpenAiApiKey(keyStatus === 'legacy-cleanup-failed'
           ? rememberOpenAiApiKey
+          : rememberOnDevice);
+      } else {
+        setAzureApiKey(cleanKey);
+        setAzureRegion(auxiliaryValue.trim().toLowerCase());
+        setRememberAzureApiKey(status === 'legacy-cleanup-failed'
+          ? rememberAzureApiKey
           : rememberOnDevice);
       }
     }
     setErrorMessage(getApiStorageError(status, sourceLangRef.current.code));
-    if (provider === 'gemini') {
-      setPipelineStatus(derivePipelineStatus(selections, sessionSaved ? cleanKey : apiKey));
+    if (provider === 'gemini' || provider === 'azure') {
+      setPipelineStatus(derivePipelineStatus(
+        selections,
+        provider === 'gemini' && sessionSaved ? cleanKey : apiKey,
+        provider === 'azure' && sessionSaved ? cleanKey : azureApiKey
+      ));
     }
     return status === 'success';
-  }, [apiKey, rememberApiKey, rememberOpenAiApiKey, selections]);
+  }, [
+    apiKey,
+    azureApiKey,
+    rememberApiKey,
+    rememberAzureApiKey,
+    rememberOpenAiApiKey,
+    selections,
+  ]);
 
   const handleDeleteApiKey = useCallback((provider: ApiKeyProvider): boolean => {
     stopWorkflow();
-    const status = deleteStoredProviderApiKey(provider);
+    const keyStatus = deleteStoredProviderApiKey(provider);
+    const regionStatus = provider === 'azure' ? deleteStoredAzureRegion() : 'success';
+    const status = keyStatus !== 'success' ? keyStatus : regionStatus;
     const deleted = status === 'success';
     let nextGeminiSelections = selectionsRef.current;
     // Honor the user's delete intent in the running app even if a browser
@@ -786,9 +871,25 @@ export function useLikeParrotController(): LikeParrotController {
           // selection cannot be persisted.
         }
       }
-    } else {
+    } else if (provider === 'openai') {
       setOpenAiApiKey('');
       setRememberOpenAiApiKey(false);
+    } else {
+      setAzureApiKey('');
+      setAzureRegion('');
+      setRememberAzureApiKey(false);
+      if (selectionsRef.current.stage2 === 'turbo_fastpath') {
+        const nextSelections: PipelineSelections = {
+          ...selectionsRef.current,
+          stage2: 'auto',
+        };
+        nextGeminiSelections = nextSelections;
+        selectionsRef.current = nextSelections;
+        setSelections(nextSelections);
+        try {
+          localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
+        } catch {}
+      }
     }
     if (status === 'success') {
       setErrorMessage(null);
@@ -799,11 +900,15 @@ export function useLikeParrotController(): LikeParrotController {
     } else {
       setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
     }
-    if (provider === 'gemini') {
-      setPipelineStatus(derivePipelineStatus(nextGeminiSelections, ''));
+    if (provider === 'gemini' || provider === 'azure') {
+      setPipelineStatus(derivePipelineStatus(
+        nextGeminiSelections,
+        provider === 'gemini' ? '' : apiKey,
+        provider === 'azure' ? '' : azureApiKey
+      ));
     }
     return deleted;
-  }, [stopWorkflow]);
+  }, [apiKey, azureApiKey, stopWorkflow]);
 
   const handleThemeChange = useCallback((nextTheme: ThemePreference) => {
     setTheme(nextTheme);
@@ -1097,6 +1202,9 @@ export function useLikeParrotController(): LikeParrotController {
       rememberGeminiApiKey: rememberApiKey,
       openAiApiKey,
       rememberOpenAiApiKey,
+      azureApiKey,
+      azureRegion,
+      rememberAzureApiKey,
       theme,
       close: handleCloseSettings,
       saveApiKey: handleSaveApiKey,
@@ -1104,6 +1212,8 @@ export function useLikeParrotController(): LikeParrotController {
       changeTheme: handleThemeChange,
   }), [
     apiKey,
+    azureApiKey,
+    azureRegion,
     handleCloseSettings,
     handleDeleteApiKey,
     handleSaveApiKey,
@@ -1111,6 +1221,7 @@ export function useLikeParrotController(): LikeParrotController {
     isSettingsOpen,
     openAiApiKey,
     rememberApiKey,
+    rememberAzureApiKey,
     rememberOpenAiApiKey,
     theme,
   ]);

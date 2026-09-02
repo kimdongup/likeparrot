@@ -31,10 +31,39 @@ export default defineConfig({
     host: true, // 모바일 및 로컬 네트워크 접속 허용
     port: 5173,
     proxy: {
-      '/api/translate': {
-        target: 'https://translate.googleapis.com',
+      '/api/azure-translate': {
+        target: 'https://api.cognitive.microsofttranslator.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/translate/, '/translate_a/single'),
+        rewrite: (path) => {
+          const incoming = new URL(path, 'https://likeparrot.local');
+          const toAzureLanguage = (language: string | null) => {
+            const normalized = language?.toLowerCase();
+            if (normalized === 'zh-tw' || normalized === 'zh-hant') return 'zh-Hant';
+            if (normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-hans') {
+              return 'zh-Hans';
+            }
+            return language?.split('-')[0] ?? '';
+          };
+          const query = new URLSearchParams({
+            'api-version': '3.0',
+            from: toAzureLanguage(incoming.searchParams.get('from')),
+            to: toAzureLanguage(incoming.searchParams.get('to')),
+          });
+          return `/translate?${query.toString()}`;
+        },
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyRequest, request) => {
+            const authorization = String(request.headers.authorization ?? '');
+            const apiKey = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+            if (apiKey) proxyRequest.setHeader('Ocp-Apim-Subscription-Key', apiKey);
+            proxyRequest.removeHeader('authorization');
+            const incoming = new URL(request.url ?? '', 'https://likeparrot.local');
+            const region = incoming.searchParams.get('region')?.trim();
+            if (region && region.toLowerCase() !== 'global') {
+              proxyRequest.setHeader('Ocp-Apim-Subscription-Region', region);
+            }
+          });
+        },
       },
     },
   },

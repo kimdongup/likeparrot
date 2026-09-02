@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, KeyRound, Palette, ReceiptText, X } from 'lucide-react';
+import { Bot, Cloud, KeyRound, Palette, ReceiptText, X } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
 import type { ApiKeyProvider, ThemePreference } from '../services/preferences';
 import type { SoundFirstModelId } from '../services/liveTranslation';
@@ -9,7 +9,7 @@ import { AppearanceSettingsPanel } from './AppearanceSettingsPanel';
 import { SourceLanguageFlags } from './SourceLanguageFlags';
 
 type ActionResult = boolean | void | Promise<boolean | void>;
-type SettingsSection = 'gemini' | 'openai' | 'appearance';
+type SettingsSection = 'gemini' | 'openai' | 'azure' | 'appearance';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -18,11 +18,15 @@ interface SettingsModalProps {
   rememberGeminiApiKey: boolean;
   openAiApiKey: string;
   rememberOpenAiApiKey: boolean;
+  azureApiKey: string;
+  azureRegion: string;
+  rememberAzureApiKey: boolean;
   selectedSoundFirstModelId: SoundFirstModelId;
   onSaveApiKey: (
     provider: ApiKeyProvider,
     apiKey: string,
-    rememberOnDevice: boolean
+    rememberOnDevice: boolean,
+    auxiliaryValue?: string
   ) => ActionResult;
   onDeleteApiKey: (provider: ApiKeyProvider) => ActionResult;
   theme: ThemePreference;
@@ -44,6 +48,9 @@ function SettingsDialog({
   rememberGeminiApiKey,
   openAiApiKey,
   rememberOpenAiApiKey,
+  azureApiKey,
+  azureRegion,
+  rememberAzureApiKey,
   selectedSoundFirstModelId,
   onSaveApiKey,
   onDeleteApiKey,
@@ -115,6 +122,7 @@ function SettingsDialog({
   const sections = [
     { id: 'gemini' as const, label: t.settings.geminiApi, Icon: KeyRound, saved: Boolean(geminiApiKey) },
     { id: 'openai' as const, label: t.settings.openAiApi, Icon: Bot, saved: Boolean(openAiApiKey) },
+    { id: 'azure' as const, label: t.settings.azureApi, Icon: Cloud, saved: Boolean(azureApiKey) },
     { id: 'appearance' as const, label: t.settings.appearance, Icon: Palette, saved: false },
   ];
 
@@ -247,6 +255,32 @@ function SettingsDialog({
                 t={t}
                 onSave={(key, remember) => onSaveApiKey('openai', key, remember)}
                 onDelete={() => onDeleteApiKey('openai')}
+              />
+            </div>
+
+            <div id="settings-panel-azure" role="tabpanel" aria-labelledby="settings-tab-azure" hidden={section !== 'azure'}>
+              <ApiKeySettingsPanel
+                provider="azure"
+                apiKey={azureApiKey}
+                rememberApiKey={rememberAzureApiKey}
+                title={t.settings.azureApiKey}
+                description={t.settings.azureApiDescription}
+                inputLabel={t.settings.azureApiInputLabel}
+                placeholder="Azure Translator key"
+                auxiliaryInput={{
+                  value: azureRegion,
+                  label: t.settings.azureRegion,
+                  placeholder: 'koreacentral',
+                  hint: t.settings.azureRegionHint,
+                }}
+                helpTitle={t.settings.azureHowToGetKey}
+                helpSteps={[t.settings.azureApiStep1, t.settings.azureApiStep2, t.settings.azureApiStep3]}
+                createKeyLabel={t.settings.createAzureKey}
+                createKeyUrl="https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation"
+                securityNotice={t.settings.azureTokenNotice}
+                t={t}
+                onSave={(key, remember, region) => onSaveApiKey('azure', key, remember, region)}
+                onDelete={() => onDeleteApiKey('azure')}
               />
             </div>
 

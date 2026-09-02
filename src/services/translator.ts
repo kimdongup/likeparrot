@@ -3,6 +3,12 @@ import type { PipelineEngineType, Stage2Option } from '../types';
 
 const FAST_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const GEMINI_REQUEST_TIMEOUT_MS = 10_000;
+const AZURE_REQUEST_TIMEOUT_MS = 8_000;
+
+export interface AzureTranslatorCredentials {
+  apiKey: string;
+  region?: string;
+}
 
 export interface TranslationResult {
   translatedText: string;
@@ -79,6 +85,7 @@ export class TranslationService {
     targetLang: string,
     targetCode: string,
     apiKey?: string,
+    azureCredentials?: AzureTranslatorCredentials,
     onChunk?: (chunk: string, fullText: string) => void,
     onClauseReady?: (clause: string) => void,
     targetEngine: Stage2Option = 'auto',
@@ -98,9 +105,10 @@ export class TranslationService {
 
     const shouldTryBrowser = targetEngine === 'auto' || targetEngine === 'chrome_nano';
     const shouldTryGemini = targetEngine === 'auto' || targetEngine === 'gemini_stream';
+    const shouldTryAzure = targetEngine === 'auto' || targetEngine === 'turbo_fastpath';
 
     if (shouldTryBrowser) {
-      if (BuiltInTranslator.isChromeNanoSupported()) {
+      if (BuiltInTranslator.isBrowserTranslatorSupported()) {
         try {
           const result = await BuiltInTranslator.translateWithChromeNano(
             cleanText,
@@ -115,20 +123,20 @@ export class TranslationService {
             onClauseReady?.(result);
             return {
               translatedText: result,
-              engineName: '⚡ Chrome built-in Translator',
+              engineName: '⚡ Browser built-in Translator',
               engineType: 'chrome_nano',
               latencyMs,
             };
           }
         } catch (error) {
           if (signal?.aborted || isAbortError(error)) throw error;
-          console.warn('[Translator] Chrome Translator error:', error);
+          console.warn('[Translator] Browser Translator error:', error);
         }
       }
 
       if (targetEngine === 'chrome_nano') {
         throw new TranslationError(
-          'The Chrome built-in translation model is unavailable for this language pair. Select Automatic or Gemini translation.'
+          'Browser on-device translation is unavailable here. Use Automatic, Gemini Flash-Lite, or Azure Translator.'
         );
       }
     }
@@ -161,35 +169,104 @@ export class TranslationService {
             targetEngine === 'gemini_stream' ||
             (error instanceof TranslationError && !error.allowFallback)
           ) throw error;
-          console.warn('[Translator] Gemini stream failed, using network fallback:', error);
+          console.warn('[Translator] Gemini translation failed, trying Azure Translator:', error);
         }
       }
     }
 
-    throwIfAborted(signal);
-    const networkResult = await BuiltInTranslator.translateUniversalFastPath(
-      cleanText,
-      targetCode,
-      sourceCode,
-      signal
-    );
-    throwIfAborted(signal);
-
-    if (!networkResult) {
-      throw new TranslationError(
-        'No translation engine is available. Check your network connection or Gemini API key.'
-      );
+    if (shouldTryAzure) {
+      const azureKey = azureCredentials?.apiKey.trim() ?? '';
+      if (!azureKey && targetEngine === 'turbo_fastpath') {
+        throw new TranslationError('Azure Translator requires an API key.');
+      }
+      if (azureKey) {
+        try {
+          const translatedText = await this.translateWithAzure(
+            cleanText,
+            sourceCode,
+            targetCode,
+            azureKey,
+            azureCredentials?.region,
+            signal
+          );
+          onChunk?.(translatedText, translatedText);
+          onClauseReady?.(translatedText);
+          return {
+            translatedText,
+            engineName: '🌐 Azure AI Translator',
+            engineType: 'network_fallback',
+            latencyMs: Math.round(performance.now() - startTime),
+          };
+        } catch (error) {
+          if (signal?.aborted || isAbortError(error)) throw error;
+          if (targetEngine === 'turbo_fastpath') throw error;
+          console.warn('[Translator] Azure Translator failed:', error);
+        }
+      }
     }
 
-    const latencyMs = Math.round(performance.now() - startTime);
-    onChunk?.(networkResult, networkResult);
-    onClauseReady?.(networkResult);
-    return {
-      translatedText: networkResult,
-      engineName: '🌐 Network translation fallback',
-      engineType: 'network_fallback',
-      latencyMs,
-    };
+    throw new TranslationError(
+      'No translation engine is available. Configure a Gemini or Azure Translator API key.'
+    );
+  }
+
+  private static async translateWithAzure(
+    text: string,
+    sourceCode: string,
+    targetCode: string,
+    apiKey: string,
+    region?: string,
+    signal?: AbortSignal
+  ): Promise<string> {
+    const requestController = new AbortController();
+    const forwardAbort = () => requestController.abort(signal?.reason);
+    signal?.addEventListener('abort', forwardAbort, { once: true });
+    const timeoutId = window.setTimeout(
+      () => requestController.abort(new DOMException('Azure request timed out', 'TimeoutError')),
+      AZURE_REQUEST_TIMEOUT_MS
+    );
+    if (signal?.aborted) forwardAbort();
+
+    try {
+      const query = new URLSearchParams({
+        from: sourceCode,
+        to: targetCode,
+      });
+      if (region?.trim()) query.set('region', region.trim());
+      const response = await fetch(`/api/azure-translate?${query.toString()}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: requestController.signal,
+        body: JSON.stringify([{ Text: text }]),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof payload?.message === 'string' ? `: ${payload.message}` : '';
+        throw new TranslationError(
+          `Azure Translator request failed (${response.status})${detail}`,
+          true
+        );
+      }
+      const translatedText = typeof payload?.translatedText === 'string'
+        ? payload.translatedText.trim()
+        : '';
+      if (!translatedText) {
+        throw new TranslationError('Azure Translator returned no translation.', true);
+      }
+      return translatedText;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (requestController.signal.aborted) {
+        throw new TranslationError('The Azure Translator request timed out.', true);
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', forwardAbort);
+    }
   }
 
   private static async translateWithGemini(

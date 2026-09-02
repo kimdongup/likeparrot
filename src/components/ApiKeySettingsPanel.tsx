@@ -27,9 +27,15 @@ interface ApiKeySettingsPanelProps {
   createKeyLabel: string;
   createKeyUrl: string;
   securityNotice?: string;
+  auxiliaryInput?: {
+    value: string;
+    label: string;
+    placeholder: string;
+    hint?: string;
+  };
   t: UiStrings;
   autoFocus?: boolean;
-  onSave: (apiKey: string, rememberOnDevice: boolean) => ActionResult;
+  onSave: (apiKey: string, rememberOnDevice: boolean, auxiliaryValue?: string) => ActionResult;
   onDelete: () => ActionResult;
 }
 
@@ -46,12 +52,14 @@ export function ApiKeySettingsPanel({
   createKeyLabel,
   createKeyUrl,
   securityNotice,
+  auxiliaryInput,
   t,
   autoFocus = false,
   onSave,
   onDelete,
 }: ApiKeySettingsPanelProps) {
   const [inputKey, setInputKey] = useState(apiKey);
+  const [auxiliaryValue, setAuxiliaryValue] = useState(auxiliaryInput?.value ?? '');
   const [rememberOnDevice, setRememberOnDevice] = useState(rememberApiKey);
   const [showKey, setShowKey] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -82,7 +90,7 @@ export function ApiKeySettingsPanel({
     setActionError(null);
     setSaveState('saving');
     try {
-      const result = await onSave(cleanKey, rememberOnDevice);
+      const result = await onSave(cleanKey, rememberOnDevice, auxiliaryValue.trim());
       if (result === false) {
         setRememberOnDevice(rememberApiKey);
         setActionError('storage');
@@ -109,6 +117,7 @@ export function ApiKeySettingsPanel({
     try {
       const result = await onDelete();
       setInputKey('');
+      setAuxiliaryValue('');
       setRememberOnDevice(false);
       setShowKey(false);
       setSaveState('idle');
@@ -169,6 +178,37 @@ export function ApiKeySettingsPanel({
             : <Eye className="h-4.5 w-4.5" aria-hidden="true" />}
         </button>
       </div>
+
+      {auxiliaryInput && (
+        <div>
+          <label
+            htmlFor={`${provider}-api-auxiliary`}
+            className="mb-1.5 block text-xs font-semibold text-slate-300 [[data-theme=light]_&]:text-slate-700"
+          >
+            {auxiliaryInput.label}
+          </label>
+          <input
+            id={`${provider}-api-auxiliary`}
+            type="text"
+            value={auxiliaryValue}
+            onChange={(event) => {
+              setAuxiliaryValue(event.target.value);
+              setSaveState('idle');
+              setActionError(null);
+            }}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder={auxiliaryInput.placeholder}
+            className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-950 [[data-theme=light]_&]:placeholder:text-slate-400"
+          />
+          {auxiliaryInput.hint && (
+            <p className="mt-1.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
+              {auxiliaryInput.hint}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-600">
         <p className="mb-2 font-semibold text-slate-200 [[data-theme=light]_&]:text-slate-800">{helpTitle}</p>

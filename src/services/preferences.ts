@@ -14,33 +14,23 @@ export interface ApiKeyReadResult {
   persistent: boolean;
 }
 
-export type ApiKeyProvider = 'gemini' | 'openai';
+export type ApiKeyProvider = 'gemini' | 'openai' | 'azure';
 
 /** Keep the original Gemini key name so existing installs migrate without work. */
 export const GEMINI_API_KEY_STORAGE_KEY = 'likeparrot_api_key';
 export const OPENAI_API_KEY_STORAGE_KEY = 'likeparrot_openai_api_key';
+export const AZURE_API_KEY_STORAGE_KEY = 'likeparrot_azure_api_key';
+export const AZURE_REGION_STORAGE_KEY = 'likeparrot_azure_region';
 export const API_KEY_STORAGE_KEY = GEMINI_API_KEY_STORAGE_KEY;
 export const THEME_STORAGE_KEY = 'likeparrot_theme';
 
-const getApiKeyStorageKey = (provider: ApiKeyProvider): string =>
-  provider === 'openai' ? OPENAI_API_KEY_STORAGE_KEY : GEMINI_API_KEY_STORAGE_KEY;
-
-const getStorageStatus = (
-  sessionFailed: boolean,
-  legacyCleanupFailed: boolean
-): PreferenceStorageStatus => {
-  if (sessionFailed && legacyCleanupFailed) return 'session-and-legacy-failed';
-  if (sessionFailed) return 'session-failed';
-  if (legacyCleanupFailed) return 'legacy-cleanup-failed';
-  return 'success';
+const getApiKeyStorageKey = (provider: ApiKeyProvider): string => {
+  if (provider === 'openai') return OPENAI_API_KEY_STORAGE_KEY;
+  if (provider === 'azure') return AZURE_API_KEY_STORAGE_KEY;
+  return GEMINI_API_KEY_STORAGE_KEY;
 };
 
-/**
- * Reads a tab-scoped provider key and, when the user opted in, its persistent
- * local copy. A persistent key is mirrored into the current tab for use.
- */
-export const readStoredProviderApiKey = (provider: ApiKeyProvider): ApiKeyReadResult => {
-  const storageKey = getApiKeyStorageKey(provider);
+const readStoredValue = (storageKey: string): ApiKeyReadResult => {
   let sessionKey = '';
   let legacyKey = '';
   let sessionFailed = false;
@@ -79,6 +69,28 @@ export const readStoredProviderApiKey = (provider: ApiKeyProvider): ApiKeyReadRe
   };
 };
 
+const getStorageStatus = (
+  sessionFailed: boolean,
+  legacyCleanupFailed: boolean
+): PreferenceStorageStatus => {
+  if (sessionFailed && legacyCleanupFailed) return 'session-and-legacy-failed';
+  if (sessionFailed) return 'session-failed';
+  if (legacyCleanupFailed) return 'legacy-cleanup-failed';
+  return 'success';
+};
+
+/**
+ * Reads a tab-scoped provider key and, when the user opted in, its persistent
+ * local copy. A persistent key is mirrored into the current tab for use.
+ */
+export const readStoredProviderApiKey = (provider: ApiKeyProvider): ApiKeyReadResult => {
+  const storageKey = getApiKeyStorageKey(provider);
+  return readStoredValue(storageKey);
+};
+
+export const readStoredAzureRegion = (): ApiKeyReadResult =>
+  readStoredValue(AZURE_REGION_STORAGE_KEY);
+
 /** Stores a provider key for this tab and optionally on this device. */
 export const saveStoredProviderApiKey = (
   provider: ApiKeyProvider,
@@ -110,11 +122,47 @@ export const saveStoredProviderApiKey = (
   return getStorageStatus(sessionFailed, legacyCleanupFailed);
 };
 
+export const saveStoredAzureRegion = (
+  region: string,
+  persistent = false
+): PreferenceStorageStatus => {
+  const cleanRegion = region.trim().toLowerCase();
+  if (!cleanRegion) return deleteStoredValue(AZURE_REGION_STORAGE_KEY);
+  return saveStoredValue(AZURE_REGION_STORAGE_KEY, cleanRegion, persistent);
+};
+
 /** Removes both the current tab key and any persistent legacy copy. */
 export const deleteStoredProviderApiKey = (
   provider: ApiKeyProvider
 ): PreferenceStorageStatus => {
   const storageKey = getApiKeyStorageKey(provider);
+  return deleteStoredValue(storageKey);
+};
+
+const saveStoredValue = (
+  storageKey: string,
+  value: string,
+  persistent: boolean
+): PreferenceStorageStatus => {
+  let sessionFailed = false;
+  let legacyCleanupFailed = false;
+  try {
+    window.sessionStorage.setItem(storageKey, value);
+  } catch {
+    sessionFailed = true;
+  }
+  if (!sessionFailed) {
+    try {
+      if (persistent) window.localStorage.setItem(storageKey, value);
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      legacyCleanupFailed = true;
+    }
+  }
+  return getStorageStatus(sessionFailed, legacyCleanupFailed);
+};
+
+const deleteStoredValue = (storageKey: string): PreferenceStorageStatus => {
   let sessionFailed = false;
   let legacyCleanupFailed = false;
 
@@ -132,6 +180,9 @@ export const deleteStoredProviderApiKey = (
 
   return getStorageStatus(sessionFailed, legacyCleanupFailed);
 };
+
+export const deleteStoredAzureRegion = (): PreferenceStorageStatus =>
+  deleteStoredValue(AZURE_REGION_STORAGE_KEY);
 
 /** Backwards-compatible Gemini helpers used by the Text First pipeline. */
 export const readStoredApiKey = (): ApiKeyReadResult => readStoredProviderApiKey('gemini');

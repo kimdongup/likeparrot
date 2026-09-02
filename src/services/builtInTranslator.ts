@@ -1,7 +1,4 @@
-/** Browser-native Translator API plus a bounded network fallback cache. */
-
-const NETWORK_TIMEOUT_MS = 2_500;
-const MAX_MEMORY_CACHE_ENTRIES = 200;
+/** Browser-native Translator API with runtime capability detection. */
 
 interface BrowserTranslatorInstance {
   translate(text: string, options?: { signal?: AbortSignal }): Promise<string>;
@@ -66,15 +63,34 @@ const awaitWithAbort = <T>(operation: Promise<T>, signal?: AbortSignal): Promise
 
 export class BuiltInTranslator {
   private static translatorCache = new Map<string, Promise<BrowserTranslatorInstance>>();
-  private static localMemoryCache = new Map<string, string>();
 
+  private static isEligibleDesktopBrowser(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const userAgent = navigator.userAgent;
+    const isFirefox = /Firefox|FxiOS/i.test(userAgent);
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+    if (isFirefox || isMobile) return false;
+
+    // Chrome and Edge currently expose the standardized Translator API.
+    // Desktop Safari is intentionally included as a future-capable route, but
+    // is used only if WebKit actually exposes the API at runtime.
+    return /Chrome|Chromium|Edg|Safari/i.test(userAgent);
+  }
+
+  public static isBrowserTranslatorSupported(): boolean {
+    return typeof window !== 'undefined'
+      && this.isEligibleDesktopBrowser()
+      && getTranslatorFactory() !== null;
+  }
+
+  /** @deprecated Use the vendor-neutral capability check. */
   public static isChromeNanoSupported(): boolean {
-    return typeof window !== 'undefined' && getTranslatorFactory() !== null;
+    return this.isBrowserTranslatorSupported();
   }
 
   public static getEngineName(): { name: string; isNano: boolean } {
-    if (this.isChromeNanoSupported()) {
-      return { name: 'Chrome built-in Translator', isNano: true };
+    if (this.isBrowserTranslatorSupported()) {
+      return { name: 'Browser built-in Translator', isNano: true };
     }
     return { name: 'Network translation fallback', isNano: false };
   }
@@ -85,6 +101,7 @@ export class BuiltInTranslator {
    * by duplicate model creation.
    */
   public static prepare(sourceCode: string, targetCode: string): void {
+    if (!this.isEligibleDesktopBrowser()) return;
     const factory = getTranslatorFactory();
     if (!factory) return;
     const sourceLanguage = toChromeLanguageCode(sourceCode);
@@ -109,6 +126,7 @@ export class BuiltInTranslator {
     signal?: AbortSignal,
     waitForDownload = false
   ): Promise<string | null> {
+    if (!this.isEligibleDesktopBrowser()) return null;
     const factory = getTranslatorFactory();
     if (!factory) return null;
     throwIfAborted(signal);
@@ -153,125 +171,4 @@ export class BuiltInTranslator {
     }
   }
 
-  /**
-   * Best-effort network fallback for BYOK-free use. These endpoints are not a
-   * browser-native/offline engine, so callers must label the result accordingly.
-   */
-  public static async translateUniversalFastPath(
-    text: string,
-    targetCode: string,
-    sourceCode: string = 'auto',
-    signal?: AbortSignal
-  ): Promise<string | null> {
-    const cleanText = text.trim();
-    if (!cleanText) return '';
-    throwIfAborted(signal);
-
-    const simpleTarget = this.toNetworkLanguageCode(targetCode);
-    const simpleSource = this.toNetworkLanguageCode(sourceCode);
-    const memoryKey = `${simpleSource}|${simpleTarget}|${cleanText}`;
-    const cached = this.localMemoryCache.get(memoryKey);
-    if (cached !== undefined) {
-      this.localMemoryCache.delete(memoryKey);
-      this.localMemoryCache.set(memoryKey, cached);
-      return cached;
-    }
-
-    const urls: string[] = [];
-    const deadlineAt = performance.now() + NETWORK_TIMEOUT_MS;
-    if (import.meta.env.DEV) {
-      urls.push(
-        `/api/translate?client=gtx&sl=${encodeURIComponent(simpleSource)}` +
-          `&tl=${encodeURIComponent(simpleTarget)}&dt=t&dj=1&q=${encodeURIComponent(cleanText)}`
-      );
-    }
-    urls.push(
-      'https://translate.googleapis.com/translate_a/single' +
-        `?client=gtx&sl=${encodeURIComponent(simpleSource)}` +
-        `&tl=${encodeURIComponent(simpleTarget)}&dt=t&dj=1&q=${encodeURIComponent(cleanText)}`
-    );
-
-    for (const url of urls) {
-      const remainingMs = Math.max(0, deadlineAt - performance.now());
-      if (remainingMs <= 0) break;
-      try {
-        const { response, data } = await this.fetchJsonWithTimeout(url, signal, remainingMs);
-        if (!response.ok) continue;
-        const sentences = data?.sentences;
-        if (!Array.isArray(sentences)) continue;
-        const result = sentences.map((sentence: { trans?: string }) => sentence.trans ?? '').join('').trim();
-        if (result) {
-          this.remember(memoryKey, result);
-          return result;
-        }
-      } catch (error) {
-        if (signal?.aborted) throw error;
-      }
-    }
-
-    // Last-resort third-party fallback. It is intentionally attempted only
-    // after the faster Google endpoint and is bounded by the same deadline.
-    try {
-      const remainingMs = Math.max(0, deadlineAt - performance.now());
-      if (remainingMs <= 0) return null;
-      const sourcePair = simpleSource === 'auto' ? 'ko' : simpleSource;
-      const url =
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}` +
-        `&langpair=${encodeURIComponent(sourcePair)}|${encodeURIComponent(simpleTarget)}`;
-      const { response, data } = await this.fetchJsonWithTimeout(url, signal, remainingMs);
-      if (response.ok) {
-        const translated = data?.responseData?.translatedText;
-        if (typeof translated === 'string' && translated.trim()) {
-          const result = translated.trim();
-          this.remember(memoryKey, result);
-          return result;
-        }
-      }
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      console.warn('[BuiltInTranslator] Network fallback failed:', error);
-    }
-
-    return null;
-  }
-
-  private static toNetworkLanguageCode(languageCode: string): string {
-    const normalized = languageCode.toLowerCase();
-    if (normalized === 'zh-tw' || normalized === 'zh-hant') return 'zh-TW';
-    if (normalized === 'zh-cn' || normalized === 'zh-hans') return 'zh-CN';
-    return languageCode === 'auto' ? 'auto' : languageCode.split('-')[0].toLowerCase();
-  }
-
-  private static remember(key: string, value: string): void {
-    this.localMemoryCache.set(key, value);
-    while (this.localMemoryCache.size > MAX_MEMORY_CACHE_ENTRIES) {
-      const oldestKey = this.localMemoryCache.keys().next().value as string | undefined;
-      if (oldestKey === undefined) break;
-      this.localMemoryCache.delete(oldestKey);
-    }
-  }
-
-  private static async fetchJsonWithTimeout(
-    url: string,
-    parentSignal?: AbortSignal,
-    timeoutMs = NETWORK_TIMEOUT_MS
-  ): Promise<{ response: Response; data: any }> {
-    throwIfAborted(parentSignal);
-    const controller = new AbortController();
-    const forwardAbort = () => controller.abort(parentSignal?.reason);
-    parentSignal?.addEventListener('abort', forwardAbort, { once: true });
-    const timeoutId = window.setTimeout(
-      () => controller.abort(new DOMException('Translation request timed out', 'TimeoutError')),
-      timeoutMs
-    );
-
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      const data = response.ok ? await response.json() : null;
-      return { response, data };
-    } finally {
-      window.clearTimeout(timeoutId);
-      parentSignal?.removeEventListener('abort', forwardAbort);
-    }
-  }
 }

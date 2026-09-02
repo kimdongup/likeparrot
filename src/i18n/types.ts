@@ -91,6 +91,7 @@ export interface UiStrings {
     navigation: string;
     geminiApi: string;
     openAiApi: string;
+    azureApi: string;
     selectSection: string;
     languages: string;
     languageHint: string;
@@ -114,6 +115,17 @@ export interface UiStrings {
     openAiApiStep3: string;
     createOpenAiKey: string;
     openAiTokenNotice: string;
+    azureApiKey: string;
+    azureApiDescription: string;
+    azureApiInputLabel: string;
+    azureRegion: string;
+    azureRegionHint: string;
+    azureHowToGetKey: string;
+    azureApiStep1: string;
+    azureApiStep2: string;
+    azureApiStep3: string;
+    createAzureKey: string;
+    azureTokenNotice: string;
     persistentKeyWarning: string;
     sessionKeyWarning: string;
     publicDeploymentWarning: string;
@@ -161,8 +173,10 @@ export interface UiStrings {
   };
   errors: {
     chooseDifferentLanguages: string;
+    browserTranslatorUnavailable: string;
     geminiApiKeyRequired: string;
     openAiApiKeyRequired: string;
+    azureApiKeyRequired: string;
     audioFirstNeedsKey: string;
     audioFirstNeedsOpenAiKey: string;
     audioFirstInit: string;
