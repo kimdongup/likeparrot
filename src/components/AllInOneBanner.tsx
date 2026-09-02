@@ -1,11 +1,13 @@
 import { memo } from 'react';
 import { Radio } from 'lucide-react';
+import { getUiStrings } from '../constants/translations';
 
 interface AllInOneBannerProps {
   isListening: boolean;
   isConnecting: boolean;
   isSpeaking: boolean;
   lastLatencyMs?: number;
+  uiLanguageCode: string;
 }
 
 export const AllInOneBanner = memo(function AllInOneBanner({
@@ -13,9 +15,12 @@ export const AllInOneBanner = memo(function AllInOneBanner({
   isConnecting,
   isSpeaking,
   lastLatencyMs,
+  uiLanguageCode,
 }: AllInOneBannerProps) {
+  const t = getUiStrings(uiLanguageCode);
+
   return (
-    <section lang="en" aria-labelledby="sound-first-title" className="sound-first-banner w-full bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/40 rounded-2xl p-3 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-3">
+    <section lang={t.locale} aria-labelledby="sound-first-title" className="sound-first-banner w-full bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/40 rounded-2xl p-3 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-3">
       {/* Glow Effect */}
       <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-emerald-500/10 via-teal-500/5 to-transparent pointer-events-none" />
 
@@ -24,11 +29,11 @@ export const AllInOneBanner = memo(function AllInOneBanner({
         <div className="flex items-center gap-2">
           <div id="sound-first-title" className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-500/50 font-mono font-bold text-emerald-300">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>Audio First · Gemini Live</span>
+            <span>{t.modes.audioFirst} · Gemini Live</span>
           </div>
 
           <span className="text-[11px] text-emerald-200/80 hidden sm:inline">
-            Streams translated audio while you speak and records the conversation
+            {t.audio.description}
           </span>
         </div>
 
@@ -36,13 +41,13 @@ export const AllInOneBanner = memo(function AllInOneBanner({
         <div className="flex items-center gap-2 font-mono">
           {isConnecting && (
             <span aria-hidden="true" className="text-amber-300 text-[11px] animate-pulse">
-              Connecting…
+              {t.common.connecting}
             </span>
           )}
-          <span className="text-slate-400 text-[11px]">Input → first output:</span>
+          <span className="text-slate-400 text-[11px]">{t.audio.latencyLabel}</span>
           <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-900 border border-emerald-500/40 text-xs font-bold text-emerald-300">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            <span>{lastLatencyMs && lastLatencyMs > 0 ? `${lastLatencyMs} ms` : 'Live sync'}</span>
+            <span>{lastLatencyMs && lastLatencyMs > 0 ? `${lastLatencyMs} ms` : t.audio.liveSync}</span>
           </div>
         </div>
       </div>
@@ -57,8 +62,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             1
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-emerald-400 font-semibold uppercase">Voice input</p>
-            <p className="font-medium text-slate-100 truncate">16kHz PCM stream</p>
+            <p className="text-[10px] text-emerald-400 font-semibold uppercase">{t.audio.voiceInput}</p>
+            <p className="font-medium text-slate-100 truncate">{t.audio.pcmStream}</p>
           </div>
         </div>
 
@@ -68,8 +73,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             2
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-teal-400 font-semibold uppercase">Live AI translation</p>
-            <p className="font-medium text-slate-100 truncate">Speech translation</p>
+            <p className="text-[10px] text-teal-400 font-semibold uppercase">{t.audio.liveTranslation}</p>
+            <p className="font-medium text-slate-100 truncate">{t.audio.speechTranslation}</p>
           </div>
         </div>
 
@@ -81,8 +86,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             3
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-violet-400 font-semibold uppercase">Instant audio output</p>
-            <p className="font-medium text-slate-100 truncate">24kHz translated audio</p>
+            <p className="text-[10px] text-violet-400 font-semibold uppercase">{t.audio.instantOutput}</p>
+            <p className="font-medium text-slate-100 truncate">{t.audio.translatedAudio}</p>
           </div>
         </div>
 
@@ -92,8 +97,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             4
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-pink-400 font-semibold uppercase">Transcript log</p>
-            <p className="font-medium text-slate-100 truncate">Text and metadata</p>
+            <p className="text-[10px] text-pink-400 font-semibold uppercase">{t.audio.transcriptLog}</p>
+            <p className="font-medium text-slate-100 truncate">{t.audio.textMetadata}</p>
           </div>
         </div>
       </div>

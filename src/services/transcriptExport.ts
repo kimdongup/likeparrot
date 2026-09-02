@@ -1,11 +1,13 @@
 import type { TranslationCard } from '../types';
-import { getEnglishLanguageNameByCode } from '../constants/languages';
+import { getLocalizedLanguageNameByCode } from '../constants/languages';
+import { getUiStrings, type UiStrings } from '../constants/translations';
 import { normalizePipelineTag } from './pipelinePresentation';
 
 export interface TranscriptExportOptions {
   title?: string;
   fileName?: string;
   locale?: string;
+  uiLanguageCode?: string;
 }
 
 const escapeHtml = (value: string): string => value
@@ -31,6 +33,20 @@ const formatDate = (date: Date, locale?: string): string => {
   } catch {
     return date.toLocaleString('en-US');
   }
+};
+
+const serializeForInlineScript = (value: unknown): string => JSON.stringify(value)
+  .replaceAll('<', '\\u003c')
+  .replaceAll('\u2028', '\\u2028')
+  .replaceAll('\u2029', '\\u2029');
+
+const localizePipelineTag = (pipelineTag: string | undefined, strings: UiStrings): string => {
+  const normalized = normalizePipelineTag(pipelineTag);
+  if (!normalized) return '';
+  if (normalized.includes('Chrome built-in Translator')) return strings.pipeline.chromeTranslator;
+  if (normalized.includes('Network translation fallback')) return strings.pipeline.networkFallback;
+  if (normalized.includes('Gemini 3.5 Flash-Lite')) return strings.pipeline.geminiStream;
+  return normalized;
 };
 
 const makeDefaultFileName = (): string => {
@@ -60,23 +76,31 @@ const normalizeFileName = (fileName?: string): string => {
   return usableName.toLowerCase().endsWith('.html') ? usableName : `${usableName}.html`;
 };
 
-const renderEntry = (card: TranslationCard, index: number, locale?: string): string => {
+const renderEntry = (
+  card: TranslationCard,
+  index: number,
+  strings: UiStrings,
+  locale: string
+): string => {
   const timestamp = safeDate(card.timestamp);
   const sourceLanguageCode = safeLanguageCode(card.sourceLangCode);
   const targetLanguageCode = safeLanguageCode(card.targetLangCode);
-  const sourceTranscriptUnavailable = card.sourceText === '(Source transcript unavailable)' ||
+  const sourceTranscriptUnavailable = card.sourceTextUnavailable ||
+    card.sourceText === '(Source transcript unavailable)' ||
     card.sourceText === '(원문 전사 없음)';
-  const sourceTextLanguage = sourceTranscriptUnavailable ? 'en' : sourceLanguageCode;
+  const sourceTextLanguage = sourceTranscriptUnavailable
+    ? safeLanguageCode(strings.locale)
+    : sourceLanguageCode;
   const sourceText = sourceTranscriptUnavailable
-    ? '(Source transcript unavailable)'
+    ? strings.transcript.sourceUnavailable
     : card.sourceText;
-  const sourceLanguageName = getEnglishLanguageNameByCode(sourceLanguageCode);
-  const targetLanguageName = getEnglishLanguageNameByCode(targetLanguageCode);
+  const sourceLanguageName = getLocalizedLanguageNameByCode(sourceLanguageCode, locale);
+  const targetLanguageName = getLocalizedLanguageNameByCode(targetLanguageCode, locale);
   const sequence = String(index + 1).padStart(3, '0');
   const latency = card.latencyMs !== undefined && card.latencyMs > 0
     ? `<span>${Math.round(card.latencyMs)}ms</span>`
     : '';
-  const pipelineTag = normalizePipelineTag(card.pipelineTag);
+  const pipelineTag = localizePipelineTag(card.pipelineTag, strings);
   const pipeline = pipelineTag
     ? `<span class="pipeline">${escapeHtml(pipelineTag)}</span>`
     : '';
@@ -84,12 +108,13 @@ const renderEntry = (card: TranslationCard, index: number, locale?: string): str
   return `
         <li>
           <article class="entry" data-expanded="false">
-            <button class="entry__source" type="button" data-action="toggle" aria-expanded="false">
+            <button class="entry__source" type="button" data-action="toggle" aria-expanded="false" aria-label="${escapeHtml(strings.transcript.showDetails)}">
               <span class="prompt" aria-hidden="true">${sequence} &lt;</span>
               <span lang="${sourceTextLanguage}">${escapeHtml(sourceText)}</span>
             </button>
-            <button class="entry__translation" type="button" data-action="speak" aria-label="Read translation aloud: ${escapeHtml(card.translatedText)}">
+            <button class="entry__translation" type="button" data-action="speak">
               <span class="prompt prompt--translation" aria-hidden="true">&gt;</span>
+              <span class="sr-only" lang="${safeLanguageCode(strings.locale)}">${escapeHtml(strings.transcript.readAloud)}: </span>
               <span data-translation lang="${targetLanguageCode}">${escapeHtml(card.translatedText)}</span>
               <span class="speaking-mark" aria-hidden="true">◉</span>
             </button>
@@ -100,10 +125,10 @@ const renderEntry = (card: TranslationCard, index: number, locale?: string): str
                 ${pipeline}
                 ${latency}
               </div>
-              <div class="actions" lang="en">
-                <button type="button" data-action="speak" aria-label="Read translation aloud">Read</button>
-                <button type="button" data-action="stop" aria-label="Stop speech">Stop</button>
-                <button type="button" data-action="copy" aria-label="Copy translation">Copy</button>
+              <div class="actions" lang="${safeLanguageCode(strings.locale)}">
+                <button type="button" data-action="speak" aria-label="${escapeHtml(strings.transcript.readAloud)}">${escapeHtml(strings.transcript.read)}</button>
+                <button type="button" data-action="stop" aria-label="${escapeHtml(strings.transcript.stopSpeech)}">${escapeHtml(strings.transcript.stop)}</button>
+                <button type="button" data-action="copy" aria-label="${escapeHtml(strings.transcript.copyTranslation)}">${escapeHtml(strings.transcript.copy)}</button>
               </div>
             </div>
           </article>
@@ -114,14 +139,25 @@ export function buildTranscriptHtml(
   cards: TranslationCard[],
   options: TranscriptExportOptions = {}
 ): string {
-  const title = options.title?.trim() || 'LikeParrot Translation Transcript';
+  const strings = getUiStrings(options.uiLanguageCode ?? options.locale);
+  const locale = options.locale ?? strings.locale;
+  const title = options.title?.trim() || strings.transcript.htmlTitle;
+  const scriptMessages = serializeForInlineScript({
+    copied: strings.transcript.copied,
+    copyFailed: strings.transcript.copyFailed,
+    hideDetails: strings.transcript.hideDetails,
+    playbackFailed: strings.transcript.playbackFailed,
+    reading: strings.transcript.reading,
+    showDetails: strings.transcript.showDetails,
+    ttsUnsupported: strings.transcript.ttsUnsupported,
+  });
   const entries = [...cards]
     .reverse()
-    .map((card, index) => renderEntry(card, index, options.locale))
+    .map((card, index) => renderEntry(card, index, strings, locale))
     .join('');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${safeLanguageCode(strings.locale)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -153,6 +189,7 @@ export function buildTranscriptHtml(
       }
     }
     * { box-sizing: border-box; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     body {
       margin: 0;
       min-height: 100vh;
@@ -257,14 +294,15 @@ export function buildTranscriptHtml(
   <main>
     <header>
       <h1>${escapeHtml(title)}</h1>
-      <span>${cards.length} ${cards.length === 1 ? 'entry' : 'entries'}</span>
+      <span>${cards.length} ${escapeHtml(strings.transcript.entries)}</span>
     </header>
-    ${entries ? `<ol>${entries}\n      </ol>` : '<p class="empty">$ No saved translation transcript.</p>'}
+    ${entries ? `<ol>${entries}\n      </ol>` : `<p class="empty">$ ${escapeHtml(strings.transcript.htmlEmpty)}</p>`}
   </main>
   <div id="status" role="status" aria-live="polite"></div>
   <script>
     (() => {
       'use strict';
+      const messages = ${scriptMessages};
       const status = document.getElementById('status');
       let statusTimer = 0;
       let speakingEntry = null;
@@ -282,7 +320,10 @@ export function buildTranscriptHtml(
       const setExpanded = (entry, expanded) => {
         entry.dataset.expanded = String(expanded);
         const toggle = entry.querySelector('[data-action="toggle"]');
-        if (toggle) toggle.setAttribute('aria-expanded', String(expanded));
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', String(expanded));
+          toggle.setAttribute('aria-label', expanded ? messages.hideDetails : messages.showDetails);
+        }
         if (expanded) {
           window.requestAnimationFrame(() => entry.scrollIntoView({ block: 'nearest' }));
         }
@@ -303,7 +344,7 @@ export function buildTranscriptHtml(
         const translation = entry.querySelector('[data-translation]');
         const text = translation ? translation.textContent.trim() : '';
         if (!text || !('speechSynthesis' in window)) {
-          showStatus('This browser does not support text-to-speech.');
+          showStatus(messages.ttsUnsupported);
           return;
         }
         const needsCancel = Boolean(
@@ -330,14 +371,14 @@ export function buildTranscriptHtml(
             entry.dataset.speaking = 'false';
             if (speakingEntry === entry) speakingEntry = null;
             if (error && error !== 'canceled' && error !== 'interrupted') {
-              showStatus('Speech playback failed. Check your device TTS settings.');
+              showStatus(messages.playbackFailed);
             }
           };
           utterance.onstart = () => {
             if (generation !== speechGeneration) return;
             speakingEntry = entry;
             entry.dataset.speaking = 'true';
-            showStatus('Reading the translation aloud.');
+            showStatus(messages.reading);
           };
           utterance.onend = () => finish();
           utterance.onerror = (event) => finish(event.error || 'unknown');
@@ -378,9 +419,9 @@ export function buildTranscriptHtml(
             field.remove();
             if (!copied) throw new Error('copy failed');
           }
-          showStatus('Translation copied.');
+          showStatus(messages.copied);
         } catch {
-          showStatus('Could not copy the translation.');
+          showStatus(messages.copyFailed);
         }
       };
 

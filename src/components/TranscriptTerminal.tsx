@@ -19,8 +19,8 @@ import type {
   FocusEvent as ReactFocusEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react';
-import { getEnglishLanguageNameByCode } from '../constants/languages';
-import { getUiStrings } from '../constants/translations';
+import { getLocalizedLanguageNameByCode } from '../constants/languages';
+import { getUiStrings, type UiStrings } from '../constants/translations';
 import { normalizePipelineTag } from '../services/pipelinePresentation';
 import type { TranslationCard } from '../types';
 
@@ -67,6 +67,7 @@ interface TranscriptRowProps {
   onPlayCard: (card: TranslationCard) => void;
   onStopCard: () => void;
   onDeleteCard: (id: string) => void;
+  strings: UiStrings;
 }
 
 const TranscriptRow = memo(function TranscriptRow({
@@ -76,6 +77,7 @@ const TranscriptRow = memo(function TranscriptRow({
   onPlayCard,
   onStopCard,
   onDeleteCard,
+  strings: t,
 }: TranscriptRowProps) {
   // null follows transient hover/focus; true/false is an explicit tap state.
   const [selected, setSelected] = useState<boolean | null>(null);
@@ -88,11 +90,19 @@ const TranscriptRow = memo(function TranscriptRow({
     selected === null && (hovered || focused)
   );
   const detailId = `transcript-detail-${card.id.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
-  const sourceTranscriptUnavailable = card.sourceText === '(Source transcript unavailable)' ||
+  const sourceTranscriptUnavailable = card.sourceTextUnavailable ||
+    card.sourceText === '(Source transcript unavailable)' ||
     card.sourceText === '(원문 전사 없음)';
-  const sourceLanguageName = getEnglishLanguageNameByCode(card.sourceLangCode);
-  const targetLanguageName = getEnglishLanguageNameByCode(card.targetLangCode);
-  const pipelineTag = normalizePipelineTag(card.pipelineTag);
+  const sourceLanguageName = getLocalizedLanguageNameByCode(card.sourceLangCode, t.locale);
+  const targetLanguageName = getLocalizedLanguageNameByCode(card.targetLangCode, t.locale);
+  const normalizedPipelineTag = normalizePipelineTag(card.pipelineTag);
+  const pipelineTag = normalizedPipelineTag?.includes('Chrome built-in Translator')
+    ? t.pipeline.chromeTranslator
+    : normalizedPipelineTag?.includes('Network translation fallback')
+      ? t.pipeline.networkFallback
+      : normalizedPipelineTag?.includes('Gemini 3.5 Flash-Lite')
+        ? t.pipeline.geminiStream
+        : normalizedPipelineTag;
 
   useEffect(() => () => {
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
@@ -157,8 +167,8 @@ const TranscriptRow = memo(function TranscriptRow({
           onClick={handleToggle}
           className="block w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-400"
         >
-          <span className="sr-only" lang="en">
-            {isExpanded ? 'Hide transcript details' : 'Show transcript details and actions'}
+          <span className="sr-only" lang={t.locale}>
+            {isExpanded ? t.transcript.hideDetails : t.transcript.showDetails}
           </span>
           <span className="flex items-start gap-2 text-[13px] leading-6 text-slate-400 sm:text-sm [[data-theme=light]_&]:text-slate-600">
             <span className="w-10 shrink-0 select-none text-right text-slate-600 [[data-theme=light]_&]:text-slate-400" aria-hidden="true">
@@ -166,9 +176,9 @@ const TranscriptRow = memo(function TranscriptRow({
             </span>
             <span
               className="min-w-0 whitespace-pre-wrap break-words"
-              lang={sourceTranscriptUnavailable ? 'en' : card.sourceLangCode}
+              lang={sourceTranscriptUnavailable ? t.locale : card.sourceLangCode}
             >
-              {sourceTranscriptUnavailable ? '(Source transcript unavailable)' : card.sourceText}
+              {sourceTranscriptUnavailable ? t.transcript.sourceUnavailable : card.sourceText}
             </span>
           </span>
           <span className="mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 text-slate-100 sm:text-base [[data-theme=light]_&]:text-slate-900">
@@ -189,12 +199,12 @@ const TranscriptRow = memo(function TranscriptRow({
         >
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <span>
-                <span lang="en">{sourceLanguageName}</span>
+                <span lang={t.locale}>{sourceLanguageName}</span>
                 {' → '}
-                <span lang="en">{targetLanguageName}</span>
+                <span lang={t.locale}>{targetLanguageName}</span>
               </span>
               <time dateTime={card.timestamp.toISOString()}>
-                {card.timestamp.toLocaleString('en-US')}
+                {card.timestamp.toLocaleString(t.locale)}
               </time>
               {pipelineTag && (
                 <span className="break-all text-emerald-400/80 [[data-theme=light]_&]:text-emerald-700">
@@ -206,12 +216,12 @@ const TranscriptRow = memo(function TranscriptRow({
               )}
             </div>
 
-            <div className="flex items-center gap-1" lang="en">
+            <div className="flex items-center gap-1" lang={t.locale}>
               <button
                 type="button"
                 onClick={() => isPlaying ? onStopCard() : onPlayCard(card)}
-                aria-label={isPlaying ? 'Stop speech' : 'Read translation aloud'}
-                title={isPlaying ? 'Stop' : 'Read translation aloud'}
+                aria-label={isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud}
+                title={isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud}
                 className={`flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isPlaying
                     ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-rose-700'
@@ -225,8 +235,8 @@ const TranscriptRow = memo(function TranscriptRow({
               <button
                 type="button"
                 onClick={() => void handleCopy()}
-                aria-label="Copy translation"
-                title="Copy translation"
+                aria-label={t.transcript.copyTranslation}
+                title={t.transcript.copyTranslation}
                 className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
               >
                 {copyState === 'copied'
@@ -236,8 +246,8 @@ const TranscriptRow = memo(function TranscriptRow({
               <button
                 type="button"
                 onClick={() => onDeleteCard(card.id)}
-                aria-label="Delete transcript entry"
-                title="Delete transcript entry"
+                aria-label={t.transcript.deleteEntry}
+                title={t.transcript.deleteEntry}
                 className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:text-rose-700"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -245,8 +255,8 @@ const TranscriptRow = memo(function TranscriptRow({
             </div>
 
             <span className="sr-only" role="status" aria-live="polite">
-              {copyState === 'copied' ? 'Translation copied.' : ''}
-              {copyState === 'failed' ? 'Could not copy the translation.' : ''}
+              {copyState === 'copied' ? t.transcript.copied : ''}
+              {copyState === 'failed' ? t.transcript.copyFailed : ''}
             </span>
         </div>
       </article>
@@ -260,6 +270,7 @@ interface TranscriptHistoryProps {
   onPlayCard: (card: TranslationCard) => void;
   onStopCard: () => void;
   onDeleteCard: (id: string) => void;
+  strings: UiStrings;
 }
 
 const TranscriptHistory = memo(function TranscriptHistory({
@@ -268,6 +279,7 @@ const TranscriptHistory = memo(function TranscriptHistory({
   onPlayCard,
   onStopCard,
   onDeleteCard,
+  strings,
 }: TranscriptHistoryProps) {
   const orderedCards = useMemo(() => [...cards].reverse(), [cards]);
   return (
@@ -281,6 +293,7 @@ const TranscriptHistory = memo(function TranscriptHistory({
           onPlayCard={onPlayCard}
           onStopCard={onStopCard}
           onDeleteCard={onDeleteCard}
+          strings={strings}
         />
       ))}
     </ol>
@@ -344,14 +357,14 @@ export function TranscriptTerminal({
   };
 
   return (
-    <section aria-labelledby="transcript-heading" className="transcript-terminal min-w-0 font-mono">
+    <section lang={t.locale} aria-labelledby="transcript-heading" className="transcript-terminal min-w-0 font-mono">
       <header className="mb-2 flex min-h-11 items-center justify-between gap-3 px-1">
         <div className="flex min-w-0 items-center gap-2">
           <Terminal className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
           <h2 id="transcript-heading" className="truncate text-sm font-semibold text-slate-200 [[data-theme=light]_&]:text-slate-800">
-            {t.cardsTitle}
+            {t.transcript.title}
           </h2>
-          <span className="shrink-0 text-xs text-slate-400 [[data-theme=light]_&]:text-slate-600" aria-label={`${cards.length} entries`}>
+          <span className="shrink-0 text-xs text-slate-400 [[data-theme=light]_&]:text-slate-600" aria-label={`${cards.length} ${t.transcript.entries}`}>
             [{cards.length}]
           </span>
         </div>
@@ -359,14 +372,13 @@ export function TranscriptTerminal({
         {cards.length > 0 && (
           <button
             type="button"
-            lang="en"
             onClick={() => {
-              if (window.confirm(`${t.clearAll}?`)) onClearAll();
+              if (window.confirm(`${t.transcript.clearAll}?`)) onClearAll();
             }}
             className="flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-xs text-slate-400 transition-colors hover:text-rose-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:text-rose-700"
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{t.clearAll}</span>
+            <span>{t.transcript.clearAll}</span>
           </button>
         )}
       </header>
@@ -377,13 +389,13 @@ export function TranscriptTerminal({
         className="max-h-[58dvh] min-h-48 overflow-y-auto overscroll-contain border-y border-slate-800 bg-slate-950 px-1 py-2 shadow-inner sm:max-h-[64dvh] sm:px-3 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-white"
         role="log"
         aria-live="off"
-        aria-label={t.cardsTitle}
+        aria-label={t.transcript.title}
       >
         {cards.length === 0 && !interimText && !isTranslating && !streamingTranslation && (
           <div className="flex min-h-44 items-center px-2 text-sm text-slate-400 [[data-theme=light]_&]:text-slate-600">
             <p>
               <span className="select-none text-emerald-500" aria-hidden="true">$ </span>
-              {t.emptyCards}. {t.emptyHint}
+              {t.transcript.empty}. {t.transcript.emptyHint}
               <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 bg-slate-600 motion-safe:animate-pulse [[data-theme=light]_&]:bg-slate-400" aria-hidden="true" />
             </p>
           </div>
@@ -395,13 +407,14 @@ export function TranscriptTerminal({
           onPlayCard={stablePlayCard}
           onStopCard={stableStopCard}
           onDeleteCard={stableDeleteCard}
+          strings={t}
         />
 
         <span className="sr-only" role="status" aria-live="polite">
           {isTranslating || streamingTranslation
-            ? t.streamingHint
+            ? t.transcript.streaming
             : interimText
-              ? t.interimHint
+              ? t.transcript.interim
               : ''}
         </span>
 
@@ -419,7 +432,7 @@ export function TranscriptTerminal({
               <p className="mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 text-indigo-100 sm:text-base [[data-theme=light]_&]:text-indigo-900">
                 <span className="w-10 shrink-0 select-none text-right text-indigo-400" aria-hidden="true">… &gt;</span>
                 <span className="min-w-0 whitespace-pre-wrap break-words" lang={targetLangCode}>
-                  {streamingTranslation || t.streamingHint}
+                  {streamingTranslation || t.transcript.streaming}
                   <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 bg-indigo-400 motion-safe:animate-pulse" aria-hidden="true" />
                 </span>
               </p>

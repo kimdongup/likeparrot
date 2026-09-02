@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
+import { getUiStrings } from '../constants/translations';
 import { WebSpeechRecognizer } from '../services/speechRecognition';
 import { TranslationService } from '../services/translator';
 import { SpeechService } from '../services/speechSynthesis';
@@ -85,6 +86,8 @@ export interface LikeParrotController {
 }
 
 const STORAGE_PIPELINE_SELECTIONS = 'likeparrot_pipeline_selections';
+const STORAGE_SOURCE_LANGUAGE = 'likeparrot_source_language';
+const STORAGE_TARGET_LANGUAGE = 'likeparrot_target_language';
 const MAX_VISIBLE_CARDS = 500;
 const MAX_PENDING_PIPELINE_JOBS = 3;
 
@@ -113,39 +116,48 @@ const getStoredSelections = (): PipelineSelections => {
   return defaultSelections;
 };
 
-const getApiStorageError = (status: PreferenceStorageStatus): string | null => {
-  if (status === 'session-and-legacy-failed') {
-    return 'Could not store the API key for this tab or remove the previous device copy. Check your browser site-data settings.';
+const getInitialLanguages = (): { source: LanguageOption; target: LanguageOption } => {
+  let source = SUPPORTED_LANGUAGES[0];
+  let target = SUPPORTED_LANGUAGES[1];
+  try {
+    const storedSource = localStorage.getItem(STORAGE_SOURCE_LANGUAGE);
+    const storedTarget = localStorage.getItem(STORAGE_TARGET_LANGUAGE);
+    source = SUPPORTED_LANGUAGES.find((language) => language.code === storedSource) ?? source;
+    target = SUPPORTED_LANGUAGES.find((language) => language.code === storedTarget) ?? target;
+  } catch {}
+  if (source.code === target.code) {
+    target = SUPPORTED_LANGUAGES.find((language) => language.code !== source.code) ?? target;
   }
-  if (status === 'session-failed') {
-    return 'Could not store the API key for this tab. You will need to enter it again after refreshing.';
-  }
-  if (status === 'legacy-cleanup-failed') {
-    return 'The API key is active in this tab, but the device-storage preference could not be saved. Check your browser site-data settings.';
-  }
-  return null;
+  return { source, target };
 };
+
+const saveLanguagePreference = (storageKey: string, languageCode: string): void => {
+  try {
+    localStorage.setItem(storageKey, languageCode);
+  } catch {
+    // The current selection remains active even when browser storage is blocked.
+  }
+};
+
+const getApiStorageError = (
+  status: PreferenceStorageStatus,
+  languageCode: string
+): string | null => status === 'success'
+  ? null
+  : getUiStrings(languageCode).settings.storageError;
 
 const derivePipelineStatus = (
   selections: PipelineSelections,
   apiKey: string,
   latencyMs = 0,
-  actualEngine?: { name: string; type: PipelineEngineType }
+  actualEngineType?: PipelineEngineType
 ): PipelineStatus => {
-  const stt = selections.stage1 === 'webspeech_fast'
-    ? 'Web Speech API (600ms fast endpoint detection)'
-    : 'Web Speech API (1000ms stable endpoint detection)';
-
-  let engine = '🤖 Automatic routing';
   let engineType: PipelineEngineType = 'network_fallback';
   if (selections.stage2 === 'chrome_nano') {
-    engine = '⚡ Chrome built-in Translator';
     engineType = 'chrome_nano';
   } else if (selections.stage2 === 'gemini_stream') {
-    engine = '🌊 Gemini 3.5 Flash-Lite (live streaming)';
     engineType = 'gemini_stream';
   } else if (selections.stage2 === 'turbo_fastpath') {
-    engine = '🌐 Network translation fallback';
     engineType = 'network_fallback';
   } else if (BuiltInTranslator.isChromeNanoSupported()) {
     engineType = 'chrome_nano';
@@ -153,21 +165,11 @@ const derivePipelineStatus = (
     engineType = 'gemini_stream';
   }
 
-  if (actualEngine) {
-    engine = actualEngine.name;
-    engineType = actualEngine.type;
-  }
+  if (actualEngineType) engineType = actualEngineType;
 
   return {
-    stt,
-    engine,
     engineType,
-    tts: selections.stage3 === 'tts_pipelined'
-      ? '🔊 Queue completed phrases when streaming is available'
-      : '🔊 Speak after the complete sentence (standard TTS)',
     latencyMs,
-    isStreaming: engineType === 'gemini_stream',
-    isLiveWs: false,
   };
 };
 
@@ -185,17 +187,18 @@ export function useLikeParrotController(): LikeParrotController {
   const [rememberApiKey, setRememberApiKey] = useState(initialApiKeyRead.persistent);
   const [theme, setTheme] = useState<ThemePreference>(readStoredTheme);
   const [selections, setSelections] = useState<PipelineSelections>(getStoredSelections);
+  const [initialLanguages] = useState(getInitialLanguages);
+  const [sourceLang, setSourceLang] = useState<LanguageOption>(initialLanguages.source);
+  const [targetLang, setTargetLang] = useState<LanguageOption>(initialLanguages.target);
   const [isSettingsOpen, setIsSettingsOpen] = useState(() => !initialApiKeyRead.apiKey);
   const [isFirstRunSettings, setIsFirstRunSettings] = useState(() => !initialApiKeyRead.apiKey);
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
     if (!isAllInOnePage && !WebSpeechRecognizer.isSupported()) {
-      return 'This browser does not support the Web Speech API used by Text First. Try Audio First instead.';
+      return getUiStrings(initialLanguages.source.code).errors.webSpeechUnsupported;
     }
-    return getApiStorageError(initialApiKeyRead.status);
+    return getApiStorageError(initialApiKeyRead.status, initialLanguages.source.code);
   });
 
-  const [sourceLang, setSourceLang] = useState<LanguageOption>(SUPPORTED_LANGUAGES[0]);
-  const [targetLang, setTargetLang] = useState<LanguageOption>(SUPPORTED_LANGUAGES[1]);
   const [isListening, setIsListening] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -232,7 +235,7 @@ export function useLikeParrotController(): LikeParrotController {
     ].slice(0, MAX_VISIBLE_CARDS));
     void saveTranslationCard(card).catch((error) => {
       console.warn('[TranslationHistory] save failed:', error);
-      setErrorMessage('Could not save the transcript on this device. Check storage space and browser permissions.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveTranscript);
     });
   }, []);
 
@@ -302,7 +305,7 @@ export function useLikeParrotController(): LikeParrotController {
       .catch((error) => {
         console.warn('[TranslationHistory] load failed:', error);
         if (active) {
-          setErrorMessage('Could not load transcripts stored on this device. Check browser storage permissions.');
+          setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.loadTranscript);
         }
       });
     return () => {
@@ -316,6 +319,9 @@ export function useLikeParrotController(): LikeParrotController {
 
   useEffect(() => {
     sourceLangRef.current = sourceLang;
+    document.documentElement.lang = sourceLang.speechCode;
+    const strings = getUiStrings(sourceLang.code);
+    document.title = `LikeParrot - ${strings.modes.audioFirst} · ${strings.modes.textFirst}`;
   }, [sourceLang]);
 
   useEffect(() => {
@@ -380,7 +386,8 @@ export function useLikeParrotController(): LikeParrotController {
         addCard({
           id: createCardId(),
           timestamp: new Date(),
-          sourceText: sourceText || '(Source transcript unavailable)',
+          sourceText,
+          sourceTextUnavailable: !sourceText,
           translatedText,
           sourceLang: currentSource.name,
           sourceLangCode: currentSource.code,
@@ -405,7 +412,10 @@ export function useLikeParrotController(): LikeParrotController {
         }
       },
       onError: (message) => {
-        if (canUpdateLiveUi()) setErrorMessage(message);
+        console.warn('[Gemini Live] runtime error:', message);
+        if (canUpdateLiveUi()) {
+          setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.audioFirstInit);
+        }
       },
     });
     liveSocketRef.current = liveService;
@@ -431,8 +441,9 @@ export function useLikeParrotController(): LikeParrotController {
       if (!isAllInOnePageRef.current) setInterimText(text);
     };
     recognizer.onError = (message) => {
+      console.warn('[Web Speech] recognition error:', message);
       if (!isAllInOnePageRef.current) {
-        setErrorMessage(message);
+        setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.textFirstInit);
         setIsConnecting(false);
         setIsListening(false);
       }
@@ -440,7 +451,7 @@ export function useLikeParrotController(): LikeParrotController {
     recognizer.onFinalTranscript = (finalText) => {
       if (!finalText.trim() || isAllInOnePageRef.current) return;
       if (pendingPipelineJobsRef.current >= MAX_PENDING_PIPELINE_JOBS) {
-        setErrorMessage('Speech arrived too quickly. Wait for the current translation to finish, then try again.');
+        setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.speechTooFast);
         return;
       }
       pendingPipelineJobsRef.current += 1;
@@ -491,7 +502,10 @@ export function useLikeParrotController(): LikeParrotController {
                   setIsSpeaking(SpeechService.isSpeaking());
                   scheduleRecognizerUnmute();
                 },
-                (error) => setErrorMessage(`TTS playback error: ${String(error)}`),
+                (error) => {
+                  console.warn('[TTS] pipelined playback failed:', error);
+                  setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
+                },
                 speechGroupId
               );
             },
@@ -515,10 +529,12 @@ export function useLikeParrotController(): LikeParrotController {
           };
           addCard(card);
           setPipelineStatus(
-            derivePipelineStatus(currentSelections, currentKey, endToEndLatencyMs, {
-              name: result.engineName,
-              type: result.engineType,
-            })
+            derivePipelineStatus(
+              currentSelections,
+              currentKey,
+              endToEndLatencyMs,
+              result.engineType
+            )
           );
 
           if (currentSelections.stage3 === 'tts_standard') {
@@ -535,7 +551,10 @@ export function useLikeParrotController(): LikeParrotController {
                 setIsSpeaking(SpeechService.isSpeaking());
                 scheduleRecognizerUnmute();
               },
-              (error) => setErrorMessage(`TTS playback error: ${String(error)}`),
+              (error) => {
+                console.warn('[TTS] sentence playback failed:', error);
+                setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
+              },
               speechGroupId
             );
           }
@@ -543,7 +562,8 @@ export function useLikeParrotController(): LikeParrotController {
           SpeechService.cancelGroup(speechGroupId);
           if (!controller.signal.aborted && generation === pipelineGenerationRef.current) {
             const message = error instanceof Error ? error.message : String(error);
-            setErrorMessage(`Translation failed: ${message}`);
+            console.warn('[Translation] pipeline failed:', message);
+            setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.translationFailed);
           }
         } finally {
           activePipelineRequestsRef.current.delete(controller);
@@ -587,7 +607,7 @@ export function useLikeParrotController(): LikeParrotController {
     window.history.pushState({}, '', nextPath);
     setCurrentPath(nextPath);
     if (nextPath === '/' && !WebSpeechRecognizer.isSupported()) {
-      setErrorMessage('This browser does not support the Web Speech API used by Text First. Try Audio First instead.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.webSpeechUnsupported);
     } else {
       setErrorMessage(null);
     }
@@ -599,7 +619,7 @@ export function useLikeParrotController(): LikeParrotController {
       localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
     } catch (error) {
       console.warn('[Storage] pipeline selection save failed:', error);
-      setErrorMessage('Could not save the pipeline settings in this browser.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.savePipeline);
     }
     setSelections(nextSelections);
     setPipelineStatus(derivePipelineStatus(nextSelections, apiKey));
@@ -617,7 +637,7 @@ export function useLikeParrotController(): LikeParrotController {
         : rememberOnDevice);
       setIsFirstRunSettings(false);
     }
-    setErrorMessage(getApiStorageError(status));
+    setErrorMessage(getApiStorageError(status, sourceLangRef.current.code));
     setPipelineStatus(derivePipelineStatus(selections, sessionSaved ? cleanKey : apiKey));
     return status === 'success';
   }, [apiKey, rememberApiKey, selections]);
@@ -634,11 +654,11 @@ export function useLikeParrotController(): LikeParrotController {
     if (status === 'success') {
       setErrorMessage(null);
     } else if (status === 'legacy-cleanup-failed') {
-      setErrorMessage('The API key is no longer active in this tab, but its device copy could not be removed. It may reappear after a refresh until you clear this site’s data.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
     } else if (status === 'session-failed') {
-      setErrorMessage('The API key is no longer active, but its tab copy could not be removed. It may reappear after refreshing this tab.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
     } else {
-      setErrorMessage('The API key is no longer active, but its browser copy could not be removed. Clear this site’s data manually.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
     }
     setPipelineStatus(derivePipelineStatus(selections, ''));
     return deleted;
@@ -647,22 +667,25 @@ export function useLikeParrotController(): LikeParrotController {
   const handleThemeChange = useCallback((nextTheme: ThemePreference) => {
     setTheme(nextTheme);
     if (!saveStoredTheme(nextTheme)) {
-      setErrorMessage('The theme is active for this page, but the preference could not be saved in your browser.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveTheme);
     }
   }, []);
 
   const handleSaveTranscript = useCallback(() => {
     if (cards.length === 0) return;
     try {
+      const strings = getUiStrings(sourceLang.code);
       downloadTranscriptHtml(cards, {
-        title: 'LikeParrot Translation Transcript',
-        locale: 'en',
+        title: strings.transcript.htmlTitle,
+        locale: strings.locale,
+        uiLanguageCode: sourceLang.code,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setErrorMessage(`Could not save the transcript HTML: ${message}`);
+      console.warn('[Transcript] HTML export failed:', message);
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveHtmlFailed);
     }
-  }, [cards]);
+  }, [cards, sourceLang.code]);
 
   const handleToggleListening = useCallback(async () => {
     setErrorMessage(null);
@@ -671,7 +694,7 @@ export function useLikeParrotController(): LikeParrotController {
       return;
     }
     if (sourceLang.code === targetLang.code) {
-      setErrorMessage('Choose different source and target languages.');
+      setErrorMessage(getUiStrings(sourceLang.code).errors.chooseDifferentLanguages);
       return;
     }
 
@@ -685,14 +708,14 @@ export function useLikeParrotController(): LikeParrotController {
 
     if (isAllInOnePage) {
       if (!apiKey.trim()) {
-        setErrorMessage('Audio First requires a Gemini API key. Add one in Settings.');
+        setErrorMessage(getUiStrings(sourceLang.code).errors.audioFirstNeedsKey);
         setIsFirstRunSettings(true);
         setIsSettingsOpen(true);
         return;
       }
       const liveService = liveSocketRef.current;
       if (!liveService) {
-        setErrorMessage('Could not initialize the Audio First engine. Refresh the page and try again.');
+        setErrorMessage(getUiStrings(sourceLang.code).errors.audioFirstInit);
         return;
       }
       const startAttempt = ++liveStartAttemptRef.current;
@@ -712,14 +735,15 @@ export function useLikeParrotController(): LikeParrotController {
         liveUiEnabledRef.current = false;
         setIsConnecting(false);
         setIsListening(false);
-        setErrorMessage(error instanceof Error ? error.message : String(error));
+        console.warn('[Gemini Live] start failed:', error);
+        setErrorMessage(getUiStrings(sourceLang.code).errors.audioFirstInit);
       }
       return;
     }
 
     const recognizer = recognizerRef.current;
     if (!recognizer) {
-      setErrorMessage('Could not initialize the Text First speech recognizer in this browser.');
+      setErrorMessage(getUiStrings(sourceLang.code).errors.textFirstInit);
       return;
     }
     if (selections.stage2 === 'auto' || selections.stage2 === 'chrome_nano') {
@@ -742,14 +766,25 @@ export function useLikeParrotController(): LikeParrotController {
   ]);
 
   const handleSourceLangChange = useCallback((language: LanguageOption) => {
+    const previousSource = sourceLangRef.current;
+    const currentTarget = targetLangRef.current;
+    if (currentTarget.code === language.code) {
+      targetLangRef.current = previousSource;
+      setTargetLang(previousSource);
+      saveLanguagePreference(STORAGE_TARGET_LANGUAGE, previousSource.code);
+    }
     sourceLangRef.current = language;
     setSourceLang(language);
+    saveLanguagePreference(STORAGE_SOURCE_LANGUAGE, language.code);
+    setErrorMessage(null);
     recognizerRef.current?.setLanguage(language.speechCode);
   }, []);
 
   const handleTargetLangChange = useCallback((language: LanguageOption) => {
+    if (sourceLangRef.current.code === language.code) return;
     targetLangRef.current = language;
     setTargetLang(language);
+    saveLanguagePreference(STORAGE_TARGET_LANGUAGE, language.code);
   }, []);
 
   const handlePlayCard = useCallback((card: TranslationCard) => {
@@ -779,7 +814,8 @@ export function useLikeParrotController(): LikeParrotController {
       (error) => {
         setPlayingCardId(null);
         setIsSpeaking(false);
-        setErrorMessage(`TTS playback error: ${String(error)}`);
+        console.warn('[TTS] transcript playback failed:', error);
+        setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
       }
     );
   }, [
@@ -813,7 +849,7 @@ export function useLikeParrotController(): LikeParrotController {
           (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
         ).slice(0, MAX_VISIBLE_CARDS));
       }
-      setErrorMessage('Could not delete this transcript entry from device storage. Try again.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.deleteEntry);
     });
   }, [cards, handleStopCard, playingCardId]);
 
@@ -829,7 +865,7 @@ export function useLikeParrotController(): LikeParrotController {
       ).sort(
         (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
       ).slice(0, MAX_VISIBLE_CARDS));
-      setErrorMessage('Could not clear transcript history from device storage. Try again.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.clearHistory);
     });
   }, [cards, handleStopCard]);
 

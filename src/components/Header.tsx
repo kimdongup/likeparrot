@@ -8,13 +8,9 @@ import {
   Volume2,
   Zap,
 } from 'lucide-react';
-import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { getUiStrings } from '../constants/translations';
 import type { LanguageOption } from '../types';
-
-const ENGLISH_UI = getUiStrings('en');
-const getEnglishLanguageName = (language: LanguageOption): string =>
-  language.name.replace(/\s*\([^)]*[\u3131-\uD79D][^)]*\)\s*$/u, '').trim();
+import { SourceLanguageFlags } from './SourceLanguageFlags';
 
 interface HeaderProps {
   isListening: boolean;
@@ -72,44 +68,22 @@ export const Header = memo(function Header({
   selectedSourceLang,
   onSourceLangChange,
 }: HeaderProps) {
-  const t = ENGLISH_UI;
+  const t = getUiStrings(selectedSourceLang.code);
   const isActive = isListening || isConnecting;
   const activityStatus = isSpeaking
-    ? t.speaking
+    ? t.common.speaking
     : isConnecting
-      ? t.connecting
+      ? t.common.connecting
       : isListening
-        ? t.listening
+        ? t.common.listening
         : '';
 
   const languageSelector = (
-    <div
-      className="flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain py-1 scrollbar-none"
-      role="group"
-      aria-label="Source language"
-    >
-      {SUPPORTED_LANGUAGES.map((language) => {
-        const selected = selectedSourceLang.code === language.code;
-        return (
-          <button
-            type="button"
-            key={language.code}
-            onClick={() => onSourceLangChange(language)}
-            disabled={isActive}
-            title={`Source language: ${getEnglishLanguageName(language)}`}
-            aria-label={`Source language: ${getEnglishLanguageName(language)}`}
-            aria-pressed={selected}
-            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border p-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              selected
-                ? 'border-indigo-400/50 bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
-                : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-700 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950'
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            <span className="text-4xl leading-none" aria-hidden="true">{language.flag}</span>
-          </button>
-        );
-      })}
-    </div>
+    <SourceLanguageFlags
+      selectedLanguage={selectedSourceLang}
+      onLanguageChange={onSourceLangChange}
+      disabled={isActive}
+    />
   );
 
   return (
@@ -120,8 +94,8 @@ export const Header = memo(function Header({
             type="button"
             onClick={() => onNavigate('/')}
             className="group flex min-h-11 min-w-11 shrink-0 items-center gap-2 text-left focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            aria-label="Go to LikeParrot Text First"
-            lang="en"
+            aria-label={t.header.home}
+            lang={t.locale}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-500 to-pink-500 text-base font-bold text-white shadow-md shadow-indigo-500/20 transition-transform group-hover:scale-105">
               🦜
@@ -134,11 +108,11 @@ export const Header = memo(function Header({
                     ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400 [[data-theme=light]_&]:text-emerald-700'
                     : 'border-indigo-500/30 bg-indigo-500/15 text-indigo-400 [[data-theme=light]_&]:text-indigo-700'
                 }`}>
-                  {isAllInOnePage ? 'Audio First' : 'Text First'}
+                  {isAllInOnePage ? t.modes.audioFirst : t.modes.textFirst}
                 </span>
               </span>
               <span className="hidden max-w-[15rem] truncate text-[10px] text-slate-400 lg:block [[data-theme=light]_&]:text-slate-500">
-                {isAllInOnePage ? t.allInOneSubtitle : t.subtitle}
+                {isAllInOnePage ? t.modes.audioFirstSubtitle : t.modes.textFirstSubtitle}
               </span>
             </span>
           </button>
@@ -154,15 +128,15 @@ export const Header = memo(function Header({
             <div className="hidden lg:block">
               {isSpeaking ? (
                 <div className="flex h-9 items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/15 px-2.5 text-xs font-semibold text-violet-400 [[data-theme=light]_&]:text-violet-700">
-                  <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> {t.speaking}
+                  <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> {t.common.speaking}
                 </div>
               ) : isConnecting ? (
                 <div className="flex h-9 items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 text-xs font-semibold text-amber-400 [[data-theme=light]_&]:text-amber-800">
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {t.connecting}
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {t.common.connecting}
                 </div>
               ) : isListening ? (
                 <div className="flex h-9 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 text-xs font-semibold text-emerald-400 [[data-theme=light]_&]:text-emerald-700">
-                  <Mic className="h-3.5 w-3.5" aria-hidden="true" /> {t.listening}
+                  <Mic className="h-3.5 w-3.5" aria-hidden="true" /> {t.common.listening}
                 </div>
               ) : null}
             </div>
@@ -170,7 +144,8 @@ export const Header = memo(function Header({
             <button
               type="button"
               onClick={() => onNavigate(isAllInOnePage ? '/' : '/all_in_one')}
-              title={isAllInOnePage ? 'Switch to Text First' : 'Switch to Audio First'}
+              title={isAllInOnePage ? t.header.switchToTextFirst : t.header.switchToAudioFirst}
+              aria-label={isAllInOnePage ? t.header.switchToTextFirst : t.header.switchToAudioFirst}
               className={`flex h-11 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 isAllInOnePage
                   ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-800 [[data-theme=light]_&]:hover:bg-slate-100'
@@ -180,13 +155,15 @@ export const Header = memo(function Header({
               {isAllInOnePage
                 ? <FileText className="h-4 w-4" aria-hidden="true" />
                 : <Zap className="h-4 w-4" aria-hidden="true" />}
-              <span>{isAllInOnePage ? 'Text First' : 'Audio First'}</span>
+              <span className="hidden sm:inline">
+                {isAllInOnePage ? t.modes.textFirst : t.modes.audioFirst}
+              </span>
             </button>
 
             {onSaveTranscript && (
               <HeaderIconButton
-                label="Save transcript as HTML"
-                title={canSaveTranscript ? 'Save the conversation transcript as HTML' : 'There is no transcript to save'}
+                label={t.header.saveTranscript}
+                title={canSaveTranscript ? t.header.saveTranscriptTitle : t.header.noTranscriptToSave}
                 onClick={onSaveTranscript}
                 disabled={!canSaveTranscript}
               >
@@ -196,8 +173,8 @@ export const Header = memo(function Header({
 
             <div className="relative">
               <HeaderIconButton
-                label={hasApiKey ? 'Open settings' : 'Open settings; Gemini API key required'}
-                title="Theme and Gemini API key settings"
+                label={hasApiKey ? t.header.openSettings : t.header.openSettingsNeedsKey}
+                title={t.header.settingsTitle}
                 onClick={onOpenSettings}
               >
                 <Settings className="h-4.5 w-4.5" aria-hidden="true" />

@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { PipelineBoard } from './components/PipelineBoard';
 import { SettingsModal } from './components/SettingsModal';
 import { TranscriptTerminal } from './components/TranscriptTerminal';
+import { getUiStrings } from './constants/translations';
 import { useLikeParrotController } from './hooks/useLikeParrotController';
 
 export function App() {
@@ -17,6 +18,7 @@ export function App() {
     settings,
     actions,
   } = useLikeParrotController();
+  const t = getUiStrings(languages.source.code);
 
   return (
     <div className="app-shell min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
@@ -38,12 +40,12 @@ export function App() {
         {view.errorMessage && (
           <div
             role="alert"
-            lang="en"
+            lang={t.locale}
             className="app-alert p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm flex items-start gap-3 [[data-theme=light]_&]:text-rose-800"
           >
             <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="font-semibold">Notice</p>
+              <p className="font-semibold">{t.common.notice}</p>
               <p className="text-xs text-rose-200 mt-0.5 [[data-theme=light]_&]:text-rose-800">
                 {view.errorMessage}
               </p>
@@ -53,7 +55,7 @@ export function App() {
               onClick={actions.dismissError}
               className="-my-2 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg px-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 [[data-theme=light]_&]:text-rose-700 [[data-theme=light]_&]:hover:text-rose-900"
             >
-              Dismiss
+              {t.common.dismiss}
             </button>
           </div>
         )}
@@ -64,6 +66,7 @@ export function App() {
             isConnecting={activity.isConnecting}
             isSpeaking={activity.isSpeaking}
             lastLatencyMs={view.soundFirstLatencyMs}
+            uiLanguageCode={languages.source.code}
           />
         ) : (
           <PipelineBoard
@@ -72,6 +75,7 @@ export function App() {
             onSelectionChange={pipeline.changeSelections}
             isListening={pipeline.isListeningOrConnecting}
             isSpeaking={activity.isSpeaking}
+            uiLanguageCode={languages.source.code}
           />
         )}
 
@@ -79,6 +83,7 @@ export function App() {
           isListening={activity.isListening}
           isConnecting={activity.isConnecting}
           onToggleListening={actions.toggleListening}
+          selectedSourceLang={languages.source}
           selectedTargetLang={languages.target}
           onTargetLangChange={languages.changeTarget}
           disabled={false}
@@ -94,8 +99,8 @@ export function App() {
           interimText={transcript.interimText}
           isTranslating={transcript.isTranslating}
           streamingTranslation={transcript.streamingTranslation}
-          sourceLangCode={languages.source.code}
-          targetLangCode={languages.target.code}
+          sourceLangCode={languages.source.speechCode}
+          targetLangCode={languages.target.speechCode}
         />
       </main>
 
@@ -109,9 +114,7 @@ export function App() {
         theme={settings.theme}
         onThemeChange={settings.changeTheme}
         sourceLanguage={languages.source}
-        targetLanguage={languages.target}
         onSourceLanguageChange={languages.changeSource}
-        onTargetLanguageChange={languages.changeTarget}
         isFirstRun={settings.isFirstRun}
         onContinueWithoutKey={settings.continueWithoutKey}
       />

@@ -1,15 +1,15 @@
 import { memo } from 'react';
 import { Mic, MicOff } from 'lucide-react';
+import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import type { LanguageOption } from '../types';
 import { getUiStrings } from '../constants/translations';
-import { LanguageFlagSelect } from './LanguageFlagSelect';
-
-const ENGLISH_UI = getUiStrings('en');
+import { LanguageNameSelect } from './LanguageNameSelect';
 
 interface ControlsProps {
   isListening: boolean;
   isConnecting: boolean;
   onToggleListening: () => void;
+  selectedSourceLang: LanguageOption;
   selectedTargetLang: LanguageOption;
   onTargetLangChange: (lang: LanguageOption) => void;
   disabled?: boolean;
@@ -19,45 +19,49 @@ export const Controls = memo(function Controls({
   isListening,
   isConnecting,
   onToggleListening,
+  selectedSourceLang,
   selectedTargetLang,
   onTargetLangChange,
   disabled,
 }: ControlsProps) {
-  const t = ENGLISH_UI;
+  const t = getUiStrings(selectedSourceLang.code);
   const isActive = isListening || isConnecting;
+  const targetOptions = SUPPORTED_LANGUAGES.filter(
+    (language) => language.code !== selectedSourceLang.code
+  );
 
   return (
-    <section lang="en" aria-label="Live interpretation controls" className="control-panel bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:border-slate-200">
-      <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-3 sm:gap-4">
+    <section lang={t.locale} aria-label={t.controls.ariaLabel} className="control-panel bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:border-slate-200">
+      <div className="grid grid-cols-[7.75rem_minmax(0,1fr)] items-end gap-2 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
         <div className="min-w-0">
           <label
             id="target-language-label"
             htmlFor="target-language"
             className="mb-1.5 block truncate text-center text-[10px] font-bold uppercase tracking-wider text-pink-300"
           >
-            To<span className="sr-only"> — translation and speech language</span>
+            {t.controls.targetShort}<span className="sr-only"> — {t.controls.targetLanguage}</span>
           </label>
-          <LanguageFlagSelect
+          <LanguageNameSelect
             id="target-language"
-            label="Translation and speech language"
+            label={t.controls.targetLanguage}
             labelledBy="target-language-label"
             selectedLanguage={selectedTargetLang}
             onLanguageChange={onTargetLangChange}
+            options={targetOptions}
             disabled={isActive}
-            className="border-pink-500/40 hover:border-pink-400 focus-within:border-pink-400 focus-within:ring-pink-400"
           />
         </div>
 
         <div className="flex min-w-0 flex-col items-stretch justify-end">
           <p className="mb-1.5 line-clamp-2 min-w-0 text-left text-[11px] leading-4 text-slate-400" role="status" aria-live="polite">
-            {isConnecting ? t.connecting : isListening ? t.micListeningHint : t.micIdleHint}
+            {isConnecting ? t.common.connecting : isListening ? t.controls.micOnHint : t.controls.micIdleHint}
           </p>
           <button
             type="button"
             onClick={onToggleListening}
             disabled={disabled}
             aria-busy={isConnecting}
-            className={`relative group flex h-16 w-full min-w-0 items-center justify-center gap-2.5 rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-lg transition-all duration-300 cursor-pointer touch-manipulation sm:px-6 sm:text-lg ${
+            className={`relative group flex h-16 w-full min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-bold leading-4 shadow-lg transition-all duration-300 cursor-pointer touch-manipulation sm:gap-2.5 sm:px-6 sm:text-lg sm:leading-tight ${
               disabled
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 : isActive
@@ -67,13 +71,13 @@ export const Controls = memo(function Controls({
           >
             {isActive ? (
               <>
-                <MicOff className="h-6 w-6 shrink-0" aria-hidden="true" />
-                <span className="min-w-0 text-center">{t.stopListening}</span>
+                <MicOff className="h-5 w-5 shrink-0 max-[359px]:hidden sm:h-6 sm:w-6" aria-hidden="true" />
+                <span className="min-w-0 break-words text-center [hyphens:auto]">{t.controls.stop}</span>
               </>
             ) : (
               <>
-                <Mic className="h-6 w-6 shrink-0" aria-hidden="true" />
-                <span className="min-w-0 text-center">{t.startListening}</span>
+                <Mic className="h-5 w-5 shrink-0 max-[359px]:hidden sm:h-6 sm:w-6" aria-hidden="true" />
+                <span className="min-w-0 break-words text-center [hyphens:auto]">{t.controls.start}</span>
               </>
             )}
           </button>

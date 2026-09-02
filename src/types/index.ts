@@ -2,6 +2,7 @@ export interface TranslationCard {
   id: string;
   timestamp: Date;
   sourceText: string;
+  sourceTextUnavailable?: boolean;
   translatedText: string;
   sourceLang: string;
   sourceLangCode?: string;
@@ -42,11 +43,6 @@ export interface PipelineSelections {
 }
 
 export interface PipelineStatus {
-  stt: string;
-  engine: string;
   engineType: PipelineEngineType;
-  tts: string;
   latencyMs: number;
-  isStreaming: boolean;
-  isLiveWs: boolean;
 }
