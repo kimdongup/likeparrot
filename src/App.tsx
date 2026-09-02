@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { AllInOneBanner } from './components/AllInOneBanner';
 import { Controls } from './components/Controls';
@@ -8,17 +9,25 @@ import { TranscriptTerminal } from './components/TranscriptTerminal';
 import { getUiStrings } from './constants/translations';
 import { useLikeParrotController } from './hooks/useLikeParrotController';
 
+const BillingPlanPage = lazy(() => import('./components/BillingPlanPage').then((module) => ({
+  default: module.BillingPlanPage,
+})));
+
 export function App() {
   const {
     view,
     activity,
     languages,
     pipeline,
+    soundFirst,
     transcript,
     settings,
     actions,
   } = useLikeParrotController();
   const t = getUiStrings(languages.source.code);
+  const selectedLiveApiKey = soundFirst.selectedModelId === 'gpt-realtime-translate'
+    ? settings.openAiApiKey
+    : settings.geminiApiKey;
 
   return (
     <div className="app-shell min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
@@ -26,11 +35,12 @@ export function App() {
         isListening={activity.isListening}
         isConnecting={activity.isConnecting}
         isSpeaking={activity.isSpeaking}
-        hasApiKey={Boolean(settings.apiKey)}
+        hasApiKey={Boolean(selectedLiveApiKey)}
         onOpenSettings={actions.openSettings}
         onSaveTranscript={actions.saveTranscript}
         canSaveTranscript={transcript.cards.length > 0}
         isAllInOnePage={view.isSoundFirstPage}
+        isBillingPlanPage={view.isBillingPlanPage}
         onNavigate={actions.navigate}
         selectedSourceLang={languages.source}
         onSourceLangChange={languages.changeSource}
@@ -60,55 +70,76 @@ export function App() {
           </div>
         )}
 
-        {view.isSoundFirstPage ? (
-          <AllInOneBanner
-            isListening={activity.isListening}
-            isConnecting={activity.isConnecting}
-            isSpeaking={activity.isSpeaking}
-            lastLatencyMs={view.soundFirstLatencyMs}
-            uiLanguageCode={languages.source.code}
-          />
+        {view.isBillingPlanPage ? (
+          <Suspense fallback={(
+            <div
+              role="status"
+              className="min-h-40 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 text-sm text-[var(--app-muted)]"
+            >
+              {t.common.connecting}
+            </div>
+          )}>
+            <BillingPlanPage uiLanguageCode={languages.source.code} />
+          </Suspense>
         ) : (
-          <PipelineBoard
-            pipeline={pipeline.status}
-            selections={pipeline.selections}
-            onSelectionChange={pipeline.changeSelections}
-            isListening={pipeline.isListeningOrConnecting}
-            isSpeaking={activity.isSpeaking}
-            uiLanguageCode={languages.source.code}
-          />
+          <>
+            {view.isSoundFirstPage ? (
+              <AllInOneBanner
+                isListening={activity.isListening}
+                isConnecting={activity.isConnecting}
+                isSpeaking={activity.isSpeaking}
+                lastLatencyMs={view.soundFirstLatencyMs}
+                uiLanguageCode={languages.source.code}
+                selectedModelId={soundFirst.selectedModelId}
+                models={soundFirst.models}
+                onModelChange={soundFirst.changeModel}
+              />
+            ) : (
+              <PipelineBoard
+                pipeline={pipeline.status}
+                selections={pipeline.selections}
+                onSelectionChange={pipeline.changeSelections}
+                isListening={pipeline.isListeningOrConnecting}
+                isSpeaking={activity.isSpeaking}
+                uiLanguageCode={languages.source.code}
+              />
+            )}
+
+            <Controls
+              isListening={activity.isListening}
+              isConnecting={activity.isConnecting}
+              onToggleListening={actions.toggleListening}
+              selectedSourceLang={languages.source}
+              selectedTargetLang={languages.target}
+              onTargetLangChange={languages.changeTarget}
+              disabled={false}
+            />
+
+            <TranscriptTerminal
+              cards={transcript.cards}
+              playingCardId={transcript.playingCardId}
+              onPlayCard={transcript.play}
+              onStopCard={transcript.stop}
+              onDeleteCard={transcript.delete}
+              onClearAll={transcript.clear}
+              interimText={transcript.interimText}
+              isTranslating={transcript.isTranslating}
+              streamingTranslation={transcript.streamingTranslation}
+              sourceLangCode={languages.source.speechCode}
+              targetLangCode={languages.target.speechCode}
+            />
+          </>
         )}
-
-        <Controls
-          isListening={activity.isListening}
-          isConnecting={activity.isConnecting}
-          onToggleListening={actions.toggleListening}
-          selectedSourceLang={languages.source}
-          selectedTargetLang={languages.target}
-          onTargetLangChange={languages.changeTarget}
-          disabled={false}
-        />
-
-        <TranscriptTerminal
-          cards={transcript.cards}
-          playingCardId={transcript.playingCardId}
-          onPlayCard={transcript.play}
-          onStopCard={transcript.stop}
-          onDeleteCard={transcript.delete}
-          onClearAll={transcript.clear}
-          interimText={transcript.interimText}
-          isTranslating={transcript.isTranslating}
-          streamingTranslation={transcript.streamingTranslation}
-          sourceLangCode={languages.source.speechCode}
-          targetLangCode={languages.target.speechCode}
-        />
       </main>
 
       <SettingsModal
         isOpen={settings.isOpen}
         onClose={settings.close}
-        apiKey={settings.apiKey}
-        rememberApiKey={settings.rememberApiKey}
+        geminiApiKey={settings.geminiApiKey}
+        rememberGeminiApiKey={settings.rememberGeminiApiKey}
+        openAiApiKey={settings.openAiApiKey}
+        rememberOpenAiApiKey={settings.rememberOpenAiApiKey}
+        selectedSoundFirstModelId={soundFirst.selectedModelId}
         onSaveApiKey={settings.saveApiKey}
         onDeleteApiKey={settings.deleteApiKey}
         theme={settings.theme}

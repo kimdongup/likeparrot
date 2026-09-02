@@ -23,6 +23,9 @@ export interface UiStrings {
     home: string;
     switchToTextFirst: string;
     switchToAudioFirst: string;
+    billingPlan: string;
+    billingPlanTitle: string;
+    billingSubtitle: string;
     saveTranscript: string;
     saveTranscriptTitle: string;
     noTranscriptToSave: string;
@@ -41,6 +44,8 @@ export interface UiStrings {
   };
   audio: {
     description: string;
+    engine: string;
+    chooseEngine: string;
     latencyLabel: string;
     liveSync: string;
     voiceInput: string;
@@ -86,6 +91,10 @@ export interface UiStrings {
     connectTitle: string;
     firstRunDescription: string;
     close: string;
+    navigation: string;
+    geminiApi: string;
+    openAiApi: string;
+    selectSection: string;
     languages: string;
     languageHint: string;
     apiKey: string;
@@ -98,6 +107,16 @@ export interface UiStrings {
     apiStep2: string;
     apiStep3: string;
     createKey: string;
+    geminiApiDescription: string;
+    openAiApiKey: string;
+    openAiApiDescription: string;
+    openAiApiInputLabel: string;
+    openAiHowToGetKey: string;
+    openAiApiStep1: string;
+    openAiApiStep2: string;
+    openAiApiStep3: string;
+    createOpenAiKey: string;
+    openAiTokenNotice: string;
     persistentKeyWarning: string;
     sessionKeyWarning: string;
     publicDeploymentWarning: string;
@@ -147,6 +166,7 @@ export interface UiStrings {
   errors: {
     chooseDifferentLanguages: string;
     audioFirstNeedsKey: string;
+    audioFirstNeedsOpenAiKey: string;
     audioFirstInit: string;
     textFirstInit: string;
     saveTranscript: string;

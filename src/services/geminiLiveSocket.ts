@@ -5,6 +5,18 @@
  * Output: mono, little-endian PCM16 at 24 kHz
  */
 
+import type {
+  LiveSocketCallbacks,
+  LiveTranslationService,
+  LiveTranslationTurn,
+} from './liveTranslation';
+
+export type {
+  LiveSocketCallbacks,
+  LiveStatus,
+  LiveTranslationTurn,
+} from './liveTranslation';
+
 const LIVE_TRANSLATION_MODEL = 'models/gemini-3.5-live-translate-preview';
 const INPUT_SAMPLE_RATE = 16_000;
 const OUTPUT_SAMPLE_RATE = 24_000;
@@ -16,26 +28,6 @@ const CONNECT_TIMEOUT_MS = 12_000;
 const INPUT_TRANSCRIPT_GRACE_MS = 300;
 const STOP_MINIMUM_DRAIN_MS = 400;
 const STOP_DRAIN_TIMEOUT_MS = 3_000;
-
-type LiveStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
-
-export interface LiveTranslationTurn {
-  sourceText: string;
-  translatedText: string;
-  sourceLanguageCode: string;
-  targetLanguageCode: string;
-  /** Approximate local-speech-start-to-first-output latency, not network RTT. */
-  latencyMs: number;
-}
-
-export interface LiveSocketCallbacks {
-  onInputTranscript?: (text: string, isInterim: boolean) => void;
-  onOutputTranscript?: (text: string) => void;
-  onTurnComplete?: (turn: LiveTranslationTurn) => void;
-  onAudioPlayingState?: (isPlaying: boolean) => void;
-  onStatusChange?: (status: LiveStatus) => void;
-  onError?: (error: string) => void;
-}
 
 interface AudioContextConstructor {
   new (options?: AudioContextOptions): AudioContext;
@@ -177,7 +169,7 @@ const transcriptsLikelyMatch = (left: string, right: string): boolean => {
   return commonPrefix >= Math.max(3, Math.ceil(minLength * 0.6));
 };
 
-export class GeminiLiveSocketService {
+export class GeminiLiveSocketService implements LiveTranslationService {
   private ws: WebSocket | null = null;
   private inputContext: AudioContext | null = null;
   private playbackContext: AudioContext | null = null;

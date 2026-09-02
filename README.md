@@ -6,16 +6,19 @@
 
 | 모드 | 경로 | 처리 흐름 | 적합한 상황 |
 | --- | --- | --- | --- |
-| **소리먼저** | `/all_in_one` | 마이크 PCM → Gemini 3.5 Live Translate WebSocket → 번역 PCM + 입·출력 전사 | 첫 음성이 중요한 실시간 회화 |
+| **소리먼저** | `/all_in_one` | Gemini Live WebSocket 또는 OpenAI Realtime WebRTC → 번역 음성 + 입·출력 전사 | 첫 음성이 중요한 실시간 회화 |
 | **글먼저** | `/` | Web Speech STT → 선택한 번역 엔진 → 기본 브라우저 TTS | 원문과 번역문을 확인하며 학습하는 경우 |
+| **요금 안내** | `/billingplan` | 실제 앱 경로별 시간·음성 비율 → 예상 USD/KRW 비용 | 공급자·무료 대안·안전장치 비교 |
 
 ### 소리먼저
 
-Gemini 3.5 Live Translate의 양방향 WebSocket을 사용하는 단일 오디오 경로입니다. 마이크 오디오를 스트리밍하고 번역 오디오를 바로 받아 재생하므로 Web Speech STT, REST 번역, 브라우저 TTS를 별도 단계로 거치지 않습니다. 서버에서 받은 입력·출력 전사는 같은 터미널형 스크립트에 기록됩니다.
+엔진 선택 메뉴에서 Gemini 3.5 Live Translate 또는 OpenAI `gpt-realtime-translate`를 고릅니다. 두 엔진 모두 마이크 오디오를 보내고 번역 음성을 바로 받아 재생하므로 Web Speech STT, REST 번역, 브라우저 TTS를 별도 단계로 거치지 않습니다. 서버에서 받은 입력·출력 전사는 같은 터미널형 스크립트에 기록됩니다.
 
 Live Translate는 목표 언어를 설정하고 입력 언어를 자동 감지합니다. 화면의 입력 언어 선택값은 사용자가 기대하는 언어와 기록 메타데이터에 사용됩니다.
 
 연결에는 세션 재개와 컨텍스트 압축을 요청합니다. 서버의 `GoAway`가 오면 현재 재생을 안전하게 마친 뒤 최신 재개 핸들로 연결합니다. 입력 전사가 늦게 도착해 다음 기록과 잘못 합쳐질 가능성이 있으면 원문 누락을 표시하고 새 세션 경계를 만듭니다.
+
+OpenAI 경로는 브라우저 WebRTC를 사용합니다. 설정에 넣은 개인 키는 같은 출처의 `/api/openai-translation-session` 함수가 60초짜리 client secret으로 교환하며, Realtime 연결에는 이 임시 secret만 전달합니다. 소스 기록을 위해 `gpt-realtime-whisper` 입력 전사도 함께 사용합니다. 확인된 공식 통역 모델만 제공하며, 공식 모델 목록에 없는 `gpt-live-1`·`gpt-live-1-mini` 이름은 메뉴에 넣지 않습니다.
 
 ### 글먼저
 
@@ -51,6 +54,7 @@ Live Translate는 목표 언어를 설정하고 입력 언어를 자동 감지�
 제목줄의 설정 버튼에서 다음 항목을 관리합니다.
 
 - **API 키:** Google AI Studio로 이동하는 발급 안내, 키 보기·숨기기, 저장과 삭제
+- **OpenAI API 키:** OpenAI 키 발급 안내와 GPT Realtime용 임시 client secret 교환
 - **API 키 저장 범위:** 기본값은 현재 탭의 `sessionStorage`이며, **이 기기에 API 키 기억하기**를 선택하면 `localStorage`에도 저장
 - **화면 테마:** 밝게, 어둡게, 시스템 설정 중 선택하고 브라우저에 저장
 
@@ -81,19 +85,21 @@ npm run build
 npm run preview
 ```
 
+일반 `npm run dev`는 프런트엔드와 기존 번역 프록시만 실행합니다. OpenAI Realtime까지 로컬에서 시험할 때는 Vercel CLI의 `vercel dev`로 프런트엔드와 `/api/openai-translation-session` 함수를 함께 실행하세요.
+
 ## API 키와 운영 보안
 
-개인용 BYOK 환경에서는 설정에 입력한 Gemini API 키를 Gemini 요청을 위해 Google로 직접 전송합니다. 브라우저 코드에서 사용하는 장기 키는 XSS, 브라우저 확장 프로그램, 공유 프로필과 개발자 도구에 노출될 수 있으므로 공개 운영 서비스의 인증 방식으로 사용하면 안 됩니다.
+개인용 BYOK 환경에서는 설정에 입력한 Gemini API 키를 Google 요청에 사용하고, OpenAI 키는 같은 출처 서버리스 함수에 보내 임시 WebRTC client secret으로 교환합니다. 두 표준 키 모두 탭 또는 사용자가 선택한 기기 브라우저 저장소에 있으므로 XSS, 브라우저 확장 프로그램, 공유 프로필과 개발자 도구에 노출될 수 있습니다. 운영자가 하나의 공용 키를 제공하는 다중 사용자 서비스의 인증 방식으로 그대로 사용하면 안 됩니다.
 
-운영 환경에서는 백엔드가 [Gemini Live 임시 토큰(ephemeral token)](https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens)을 발급하고 모델·언어·세션 설정을 서버에서 제한하도록 구성하세요. 일반 Gemini 번역과 네트워크 번역도 서버 측 자격 증명을 사용하는 프록시로 옮기는 것을 권장합니다.
+공용 키 방식의 운영 환경에서는 비밀키를 서버 환경 변수에만 두고 사용자 인증과 rate limit을 추가해야 합니다. Gemini는 백엔드가 [Live 임시 토큰(ephemeral token)](https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens)을 발급하고 모델·언어·세션 설정을 제한하도록 구성하세요. 일반 Gemini 번역도 서버 측 자격 증명을 사용하는 프록시로 옮기는 것을 권장합니다.
 
 ## 브라우저와 배포 참고사항
 
-- 소리먼저에는 `getUserMedia`, WebSocket, Web Audio API와 유효한 Gemini API 키가 필요합니다.
+- 소리먼저에는 `getUserMedia`와 HTTPS가 필요합니다. Gemini 엔진에는 WebSocket·Web Audio API·Gemini 키가, OpenAI 엔진에는 WebRTC·서버리스 token 교환 경로·OpenAI 키가 필요합니다.
 - 글먼저 STT에는 Web Speech Recognition 지원 브라우저가 필요하고, 기록 읽기에는 Web Speech Synthesis 지원이 필요합니다.
 - Chrome 내장 Translator는 지원되는 데스크톱 Chrome과 언어 쌍에서만 동작합니다. 첫 실행 시 언어 모델 다운로드가 필요할 수 있습니다.
 - 마이크 기능을 배포할 때는 반드시 HTTPS를 사용하세요. `localhost`를 제외한 HTTP 환경에서는 마이크와 AudioWorklet이 차단될 수 있습니다.
-- 현재 빌드는 `/sw.js`, `/assets/*` 같은 절대 URL을 사용하므로 도메인의 루트 경로에 배포해야 합니다. `/all_in_one` 직접 진입을 포함한 모든 앱 경로는 `/index.html`로 rewrite하세요.
+- 현재 빌드는 `/sw.js`, `/assets/*` 같은 절대 URL을 사용하므로 도메인의 루트 경로에 배포해야 합니다. `/all_in_one`과 `/billingplan` 직접 진입은 `/index.html`로 rewrite하되 `/api/*`는 서버리스 함수로 남겨야 합니다.
 - 글먼저 화면의 지연값은 STT 최종 문장을 받은 시점부터 번역 완료 시점까지입니다. 브라우저 TTS 큐 대기와 실제 발화 시작 시간은 포함하지 않습니다.
 
 ## 코드 구성
@@ -102,9 +108,12 @@ UI 컴포넌트는 렌더링과 사용자 입력을 담당하고, 재사용 가�
 
 - `src/components/TranscriptTerminal.tsx`: 터미널형 기록 UI와 접근 가능한 상호작용
 - `src/components/SettingsModal.tsx`: API 키·테마 설정 UI
+- `src/components/BillingPlanPage.tsx`: 요금 분석 화면
 - `src/components/PipelineBoard.tsx`: 글먼저 파이프라인 선택 UI
 - `src/hooks/useLikeParrotController.ts`: 화면과 분리된 앱 상태·라우팅·음성 워크플로 조정
 - `src/services/geminiLiveSocket.ts`: 소리먼저 WebSocket·오디오 세션
+- `src/services/openAiRealtimeTranslation.ts`: OpenAI WebRTC 통역 세션
+- `src/services/costEstimator.ts`: 공급자별 순수 비용 계산 로직
 - `src/services/pipelineGuide.ts`: 16개 파이프라인 조합 설명 생성
 - `src/services/preferences.ts`: API 키와 테마 저장 정책
 - `src/services/transcriptExport.ts`: 독립 HTML 생성과 다운로드

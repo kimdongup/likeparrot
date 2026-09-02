@@ -14,8 +14,16 @@ export interface ApiKeyReadResult {
   persistent: boolean;
 }
 
-export const API_KEY_STORAGE_KEY = 'likeparrot_api_key';
+export type ApiKeyProvider = 'gemini' | 'openai';
+
+/** Keep the original Gemini key name so existing installs migrate without work. */
+export const GEMINI_API_KEY_STORAGE_KEY = 'likeparrot_api_key';
+export const OPENAI_API_KEY_STORAGE_KEY = 'likeparrot_openai_api_key';
+export const API_KEY_STORAGE_KEY = GEMINI_API_KEY_STORAGE_KEY;
 export const THEME_STORAGE_KEY = 'likeparrot_theme';
+
+const getApiKeyStorageKey = (provider: ApiKeyProvider): string =>
+  provider === 'openai' ? OPENAI_API_KEY_STORAGE_KEY : GEMINI_API_KEY_STORAGE_KEY;
 
 const getStorageStatus = (
   sessionFailed: boolean,
@@ -28,10 +36,11 @@ const getStorageStatus = (
 };
 
 /**
- * Reads a tab-scoped Gemini key and, when the user opted in, its persistent
+ * Reads a tab-scoped provider key and, when the user opted in, its persistent
  * local copy. A persistent key is mirrored into the current tab for use.
  */
-export const readStoredApiKey = (): ApiKeyReadResult => {
+export const readStoredProviderApiKey = (provider: ApiKeyProvider): ApiKeyReadResult => {
+  const storageKey = getApiKeyStorageKey(provider);
   let sessionKey = '';
   let legacyKey = '';
   let sessionFailed = false;
@@ -40,13 +49,13 @@ export const readStoredApiKey = (): ApiKeyReadResult => {
   let migratedLegacyKey = false;
 
   try {
-    sessionKey = (window.sessionStorage.getItem(API_KEY_STORAGE_KEY) ?? '').trim();
+    sessionKey = (window.sessionStorage.getItem(storageKey) ?? '').trim();
   } catch {
     sessionFailed = true;
   }
 
   try {
-    legacyKey = (window.localStorage.getItem(API_KEY_STORAGE_KEY) ?? '').trim();
+    legacyKey = (window.localStorage.getItem(storageKey) ?? '').trim();
   } catch {
     legacyReadFailed = true;
     legacyCleanupFailed = true;
@@ -54,7 +63,7 @@ export const readStoredApiKey = (): ApiKeyReadResult => {
 
   if (!sessionKey && legacyKey) {
     try {
-      window.sessionStorage.setItem(API_KEY_STORAGE_KEY, legacyKey);
+      window.sessionStorage.setItem(storageKey, legacyKey);
       sessionKey = legacyKey;
       migratedLegacyKey = true;
     } catch {
@@ -70,27 +79,29 @@ export const readStoredApiKey = (): ApiKeyReadResult => {
   };
 };
 
-/** Stores a Gemini key for this tab and optionally on this device. */
-export const saveStoredApiKey = (
+/** Stores a provider key for this tab and optionally on this device. */
+export const saveStoredProviderApiKey = (
+  provider: ApiKeyProvider,
   apiKey: string,
   persistent = false
 ): PreferenceStorageStatus => {
   const cleanKey = apiKey.trim();
-  if (!cleanKey) return deleteStoredApiKey();
+  if (!cleanKey) return deleteStoredProviderApiKey(provider);
+  const storageKey = getApiKeyStorageKey(provider);
 
   let sessionFailed = false;
   let legacyCleanupFailed = false;
 
   try {
-    window.sessionStorage.setItem(API_KEY_STORAGE_KEY, cleanKey);
+    window.sessionStorage.setItem(storageKey, cleanKey);
   } catch {
     sessionFailed = true;
   }
 
   if (!sessionFailed) {
     try {
-      if (persistent) window.localStorage.setItem(API_KEY_STORAGE_KEY, cleanKey);
-      else window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+      if (persistent) window.localStorage.setItem(storageKey, cleanKey);
+      else window.localStorage.removeItem(storageKey);
     } catch {
       legacyCleanupFailed = true;
     }
@@ -100,24 +111,38 @@ export const saveStoredApiKey = (
 };
 
 /** Removes both the current tab key and any persistent legacy copy. */
-export const deleteStoredApiKey = (): PreferenceStorageStatus => {
+export const deleteStoredProviderApiKey = (
+  provider: ApiKeyProvider
+): PreferenceStorageStatus => {
+  const storageKey = getApiKeyStorageKey(provider);
   let sessionFailed = false;
   let legacyCleanupFailed = false;
 
   try {
-    window.sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+    window.sessionStorage.removeItem(storageKey);
   } catch {
     sessionFailed = true;
   }
 
   try {
-    window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+    window.localStorage.removeItem(storageKey);
   } catch {
     legacyCleanupFailed = true;
   }
 
   return getStorageStatus(sessionFailed, legacyCleanupFailed);
 };
+
+/** Backwards-compatible Gemini helpers used by the Text First pipeline. */
+export const readStoredApiKey = (): ApiKeyReadResult => readStoredProviderApiKey('gemini');
+
+export const saveStoredApiKey = (
+  apiKey: string,
+  persistent = false
+): PreferenceStorageStatus => saveStoredProviderApiKey('gemini', apiKey, persistent);
+
+export const deleteStoredApiKey = (): PreferenceStorageStatus =>
+  deleteStoredProviderApiKey('gemini');
 
 export const readStoredTheme = (): ThemePreference => {
   try {

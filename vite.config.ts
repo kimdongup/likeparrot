@@ -11,7 +11,12 @@ const stampServiceWorker = () => ({
   closeBundle() {
     const serviceWorkerPath = resolve('dist/sw.js')
     const source = readFileSync(serviceWorkerPath, 'utf8')
-    const assets = readdirSync(resolve('dist/assets')).map((fileName) => `/assets/${fileName}`)
+    // Keep the large, rarely used billing guide lazy on mobile. Once visited,
+    // the service worker's normal runtime cache still makes the chunk available
+    // offline without downloading it during every first install or update.
+    const assets = readdirSync(resolve('dist/assets'))
+      .filter((fileName) => !fileName.startsWith('BillingPlanPage-'))
+      .map((fileName) => `/assets/${fileName}`)
     const stamped = source
       .replaceAll('__BUILD_ID__', Date.now().toString())
       .replace('/* __PRECACHE_ASSETS__ */', assets.map((asset) => JSON.stringify(asset)).join(', '))

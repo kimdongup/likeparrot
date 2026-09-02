@@ -1,32 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Check,
-  CheckCircle2,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Monitor,
-  Moon,
-  ShieldAlert,
-  Sun,
-  Trash2,
-  X,
-} from 'lucide-react';
-import type { ThemePreference } from '../services/preferences';
+import { Bot, KeyRound, Palette, X } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
+import type { ApiKeyProvider, ThemePreference } from '../services/preferences';
+import type { SoundFirstModelId } from '../services/liveTranslation';
 import type { LanguageOption } from '../types';
+import { ApiKeySettingsPanel } from './ApiKeySettingsPanel';
+import { AppearanceSettingsPanel } from './AppearanceSettingsPanel';
 import { SourceLanguageFlags } from './SourceLanguageFlags';
 
 type ActionResult = boolean | void | Promise<boolean | void>;
+type SettingsSection = 'gemini' | 'openai' | 'appearance';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  apiKey: string;
-  rememberApiKey: boolean;
-  onSaveApiKey: (apiKey: string, rememberOnDevice: boolean) => ActionResult;
-  onDeleteApiKey: () => ActionResult;
+  geminiApiKey: string;
+  rememberGeminiApiKey: boolean;
+  openAiApiKey: string;
+  rememberOpenAiApiKey: boolean;
+  selectedSoundFirstModelId: SoundFirstModelId;
+  onSaveApiKey: (
+    provider: ApiKeyProvider,
+    apiKey: string,
+    rememberOnDevice: boolean
+  ) => ActionResult;
+  onDeleteApiKey: (provider: ApiKeyProvider) => ActionResult;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   sourceLanguage: LanguageOption;
@@ -43,8 +41,11 @@ export function SettingsModal({ isOpen, ...dialogProps }: SettingsModalProps) {
 
 function SettingsDialog({
   onClose,
-  apiKey,
-  rememberApiKey,
+  geminiApiKey,
+  rememberGeminiApiKey,
+  openAiApiKey,
+  rememberOpenAiApiKey,
+  selectedSoundFirstModelId,
   onSaveApiKey,
   onDeleteApiKey,
   theme,
@@ -54,41 +55,14 @@ function SettingsDialog({
   isFirstRun = false,
   onContinueWithoutKey,
 }: SettingsDialogProps) {
-  const [inputKey, setInputKey] = useState(apiKey);
-  const [rememberOnDevice, setRememberOnDevice] = useState(rememberApiKey);
-  const [showKey, setShowKey] = useState(false);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [actionError, setActionError] = useState<
-    'storage' | 'save' | 'delete' | 'incomplete-delete' | null
-  >(null);
+  const initialSection: SettingsSection = selectedSoundFirstModelId === 'gpt-realtime-translate'
+    ? 'openai'
+    : 'gemini';
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const firstRunAtOpenRef = useRef(isFirstRun);
-  const shouldFocusApiKeyRef = useRef(!isFirstRun && !apiKey);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
-  const savedTimerRef = useRef<number | null>(null);
   const t = getUiStrings(sourceLanguage.code);
-  const themeOptions: Array<{
-    value: ThemePreference;
-    label: string;
-    description: string;
-    Icon: typeof Sun;
-  }> = [
-    { value: 'light', label: t.settings.light, description: t.settings.lightDescription, Icon: Sun },
-    { value: 'dark', label: t.settings.dark, description: t.settings.darkDescription, Icon: Moon },
-    { value: 'system', label: t.settings.system, description: t.settings.systemDescription, Icon: Monitor },
-  ];
-  const actionErrorMessage = actionError === 'storage'
-    ? t.settings.storageError
-    : actionError === 'save'
-      ? t.settings.saveError
-      : actionError === 'delete'
-        ? t.settings.deleteError
-        : actionError === 'incomplete-delete'
-          ? t.settings.incompleteDeleteError
-          : null;
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -100,11 +74,7 @@ function SettingsDialog({
       : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const focusTimer = window.setTimeout(() => {
-      if (firstRunAtOpenRef.current) dialogRef.current?.focus({ preventScroll: true });
-      else if (shouldFocusApiKeyRef.current) inputRef.current?.focus();
-      else dialogRef.current?.focus({ preventScroll: true });
-    }, 0);
+    const focusTimer = window.setTimeout(() => dialogRef.current?.focus({ preventScroll: true }), 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -113,16 +83,14 @@ function SettingsDialog({
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
-
       const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )].filter((element) => !element.hasAttribute('hidden') && element.tabIndex >= 0);
+      )].filter((element) => !element.closest('[hidden]') && element.tabIndex >= 0);
       if (!focusable.length) {
         event.preventDefault();
         dialogRef.current.focus();
         return;
       }
-
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (document.activeElement === dialogRef.current) {
@@ -140,92 +108,21 @@ function SettingsDialog({
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.clearTimeout(focusTimer);
-      if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
   }, []);
 
-  const handleSave = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const cleanKey = inputKey.trim();
-    if (!cleanKey || saveState === 'saving' || isDeleting) return;
-
-    setActionError(null);
-    setSaveState('saving');
-    try {
-      const result = await onSaveApiKey(cleanKey, rememberOnDevice);
-      if (result === false) {
-        setRememberOnDevice(rememberApiKey);
-        setActionError('storage');
-        setSaveState('idle');
-        return;
-      }
-      setInputKey(cleanKey);
-      setSaveState('saved');
-      if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = window.setTimeout(() => {
-        savedTimerRef.current = null;
-        setSaveState('idle');
-      }, 1800);
-    } catch {
-      setActionError('save');
-      setSaveState('idle');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (saveState === 'saving' || isDeleting) return;
-    setActionError(null);
-    setIsDeleting(true);
-    try {
-      const result = await onDeleteApiKey();
-      if (result === false) {
-        setInputKey('');
-        setRememberOnDevice(false);
-        setShowKey(false);
-        setSaveState('idle');
-        setActionError('incomplete-delete');
-        return;
-      }
-      setInputKey('');
-      setRememberOnDevice(false);
-      setShowKey(false);
-      setSaveState('idle');
-      inputRef.current?.focus();
-    } catch {
-      setActionError('delete');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleThemeKeyDown = (
-    event: React.KeyboardEvent<HTMLButtonElement>,
-    index: number
-  ) => {
-    let nextIndex = index;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-      nextIndex = (index + 1) % themeOptions.length;
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      nextIndex = (index - 1 + themeOptions.length) % themeOptions.length;
-    } else if (event.key === 'Home') {
-      nextIndex = 0;
-    } else if (event.key === 'End') {
-      nextIndex = themeOptions.length - 1;
-    } else {
-      return;
-    }
-    event.preventDefault();
-    onThemeChange(themeOptions[nextIndex].value);
-    const buttons = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
-    buttons?.[nextIndex]?.focus();
-  };
+  const sections = [
+    { id: 'gemini' as const, label: t.settings.geminiApi, Icon: KeyRound, saved: Boolean(geminiApiKey) },
+    { id: 'openai' as const, label: t.settings.openAiApi, Icon: Bot, saved: Boolean(openAiApiKey) },
+    { id: 'appearance' as const, label: t.settings.appearance, Icon: Palette, saved: false },
+  ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 pl-[max(0px,env(safe-area-inset-left))] pr-[max(0px,env(safe-area-inset-right))] backdrop-blur-sm sm:items-center sm:py-5 sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))]"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 pl-[max(0px,env(safe-area-inset-left))] pr-[max(0px,env(safe-area-inset-right))] backdrop-blur-sm sm:items-center sm:p-5"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -238,212 +135,122 @@ function SettingsDialog({
         aria-describedby={isFirstRun ? 'settings-first-run-description' : undefined}
         tabIndex={-1}
         lang={t.locale}
-        className="settings-panel flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl outline-none sm:max-w-xl sm:rounded-3xl [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-950"
+        className="settings-panel flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl outline-none sm:max-w-4xl sm:rounded-3xl [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-950"
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 px-5 py-4 sm:px-6 [[data-theme=light]_&]:border-slate-200">
-          <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-400">
-              {isFirstRun ? t.settings.gettingStarted : 'LikeParrot'}
-            </p>
-            <h2 id="settings-title" className="text-balance text-lg font-bold tracking-tight sm:text-xl">
-              {isFirstRun ? t.settings.connectTitle : t.settings.title}
-            </h2>
-            {isFirstRun && (
-              <p
-                id="settings-first-run-description"
-                className="mt-1.5 max-w-md text-sm leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600"
-              >
-                {t.settings.firstRunDescription}
+        <header className="shrink-0 border-b border-slate-800 px-4 py-3 sm:px-5 [[data-theme=light]_&]:border-slate-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-400">
+                {isFirstRun ? t.settings.gettingStarted : 'LikeParrot'}
               </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t.settings.close}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className={`overflow-y-auto overscroll-contain px-5 pt-5 sm:px-6 sm:pt-6 ${
-          isFirstRun
-            ? 'pb-5 sm:pb-6'
-            : 'pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6'
-        }`}>
-          <form onSubmit={handleSave} autoComplete="off" className="space-y-6">
-            <section aria-labelledby="languages-heading" className="space-y-3">
-              <div>
-                <h3 id="languages-heading" className="text-sm font-bold">{t.settings.languages}</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
-                  {t.settings.languageHint}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-3 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50">
-                <SourceLanguageFlags
-                  selectedLanguage={sourceLanguage}
-                  onLanguageChange={onSourceLanguageChange}
-                  layout="grid"
-                />
-              </div>
-            </section>
-
-            <section aria-labelledby="api-key-heading" className="space-y-3">
-              <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-indigo-400" aria-hidden="true" />
-                <h3 id="api-key-heading" className="text-sm font-bold">{t.settings.apiKey}</h3>
-                {apiKey && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400 [[data-theme=light]_&]:text-emerald-700">
-                    <Check className="h-3 w-3" aria-hidden="true" /> {t.settings.apiSaved}
-                  </span>
-                )}
-              </div>
-
-              <div className="relative">
-                <label htmlFor="settings-api-key" className="sr-only">{t.settings.apiInputLabel}</label>
-                <input
-                  ref={inputRef}
-                  id="settings-api-key"
-                  type={showKey ? 'text' : 'password'}
-                  value={inputKey}
-                  onChange={(event) => {
-                    setInputKey(event.target.value);
-                    setSaveState('idle');
-                    setActionError(null);
-                  }}
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  inputMode="text"
-                  placeholder="AIzaSy..."
-                  required
-                  className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 pr-12 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-950 [[data-theme=light]_&]:placeholder:text-slate-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey((visible) => !visible)}
-                  aria-label={showKey ? t.settings.hideKey : t.settings.showKey}
-                  aria-pressed={showKey}
-                  className="absolute right-1 top-0 flex h-12 w-11 items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:text-slate-900"
-                >
-                  {showKey
-                    ? <EyeOff className="h-4.5 w-4.5" aria-hidden="true" />
-                    : <Eye className="h-4.5 w-4.5" aria-hidden="true" />}
-                </button>
-              </div>
-
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-600">
-                <p className="mb-2 font-semibold text-slate-200 [[data-theme=light]_&]:text-slate-800">
-                  {t.settings.howToGetKey}
-                </p>
-                <ol className="list-decimal space-y-1 pl-4">
-                  <li>{t.settings.apiStep1}</li>
-                  <li>{t.settings.apiStep2}</li>
-                  <li>{t.settings.apiStep3}</li>
-                </ol>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg font-semibold text-indigo-400 underline-offset-4 hover:text-indigo-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:text-indigo-700"
-                >
-                  {t.settings.createKey}
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-              </div>
-
-              <div className="flex items-start gap-2 text-xs leading-5 text-amber-300/90 [[data-theme=light]_&]:text-amber-800">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <p>
-                  {rememberOnDevice
-                    ? `${t.settings.persistentKeyWarning} `
-                    : `${t.settings.sessionKeyWarning} `}
-                  {t.settings.publicDeploymentWarning}
-                </p>
-              </div>
-
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-300 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={rememberOnDevice}
-                  onChange={(event) => {
-                    setRememberOnDevice(event.target.checked);
-                    setSaveState('idle');
-                    setActionError(null);
-                  }}
-                  className="h-5 w-5 shrink-0 accent-indigo-600"
-                />
-                <span>
-                  <span className="block font-semibold">{t.settings.rememberKey}</span>
-                  <span className="block text-xs text-slate-400 [[data-theme=light]_&]:text-slate-600">{t.settings.personalDeviceOnly}</span>
-                </span>
-              </label>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={!inputKey.trim() || saveState === 'saving' || isDeleting}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-lg shadow-indigo-900/20 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
-                >
-                  {saveState === 'saving' ? t.common.saving : saveState === 'saved' ? (
-                    <><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {t.common.saved}</>
-                  ) : t.settings.saveKey}
-                </button>
-                {(apiKey || inputKey) && (
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete()}
-                    disabled={saveState === 'saving' || isDeleting}
-                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50 [[data-theme=light]_&]:text-rose-700"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" /> {isDeleting ? t.common.deleting : t.settings.deleteKey}
-                  </button>
-                )}
-                <span className="sr-only" role="status" aria-live="polite">
-                  {saveState === 'saved' ? t.common.saved : ''}
-                </span>
-              </div>
-              {actionErrorMessage && (
-                <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs leading-5 text-rose-300 [[data-theme=light]_&]:text-rose-800">
-                  {actionErrorMessage}
+              <h2 id="settings-title" className="text-lg font-bold tracking-tight sm:text-xl">
+                {isFirstRun ? t.settings.connectTitle : t.settings.title}
+              </h2>
+              {isFirstRun && (
+                <p id="settings-first-run-description" className="mt-1 max-w-xl text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
+                  {t.settings.firstRunDescription}
                 </p>
               )}
-            </section>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t.settings.close}
+              className="-mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <SourceLanguageFlags
+            selectedLanguage={sourceLanguage}
+            onLanguageChange={onSourceLanguageChange}
+            className="mt-2"
+          />
+        </header>
 
-            <section aria-labelledby="theme-heading" className="border-t border-slate-800 pt-5 [[data-theme=light]_&]:border-slate-200">
-              <h3 id="theme-heading" className="mb-3 text-sm font-bold">{t.settings.appearance}</h3>
-              <div role="radiogroup" aria-labelledby="theme-heading" className="grid grid-cols-3 gap-2">
-                {themeOptions.map(({ value, label, description, Icon }, index) => {
-                  const selected = theme === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => onThemeChange(value)}
-                      onKeyDown={(event) => handleThemeKeyDown(event, index)}
-                      className={`min-h-[5.5rem] rounded-xl border p-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                        selected
-                          ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200 [[data-theme=light]_&]:text-indigo-800'
-                          : 'border-slate-700 bg-slate-950/40 text-slate-300 hover:border-slate-500 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-700'
-                      }`}
-                    >
-                      <Icon className="mb-1.5 h-4.5 w-4.5" aria-hidden="true" />
-                      <span className="block text-xs font-bold sm:text-sm">{label}</span>
-                      <span className="mt-0.5 hidden text-[10px] leading-4 opacity-70 sm:block">{description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          </form>
+        <div className="flex min-h-0 flex-1">
+          <nav
+            aria-label={t.settings.navigation}
+            className="w-[4.25rem] shrink-0 border-r border-slate-800 bg-slate-950/35 p-2 sm:w-48 sm:p-3 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50"
+          >
+            <div role="tablist" aria-orientation="vertical" aria-label={t.settings.selectSection} className="space-y-1.5">
+              {sections.map(({ id, label, Icon, saved }) => {
+                const active = section === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-controls={`settings-panel-${id}`}
+                    id={`settings-tab-${id}`}
+                    onClick={() => setSection(id)}
+                    className={`relative flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:justify-start sm:px-3 ${
+                      active
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100 [[data-theme=light]_&]:hover:bg-white [[data-theme=light]_&]:hover:text-slate-900'
+                    }`}
+                    title={label}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span className="hidden sm:inline">{label}</span>
+                    {saved && id !== 'appearance' && (
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6">
+            <div id="settings-panel-gemini" role="tabpanel" aria-labelledby="settings-tab-gemini" hidden={section !== 'gemini'}>
+              <ApiKeySettingsPanel
+                provider="gemini"
+                apiKey={geminiApiKey}
+                rememberApiKey={rememberGeminiApiKey}
+                title={t.settings.apiKey}
+                description={t.settings.geminiApiDescription}
+                inputLabel={t.settings.apiInputLabel}
+                placeholder="AIzaSy..."
+                helpTitle={t.settings.howToGetKey}
+                helpSteps={[t.settings.apiStep1, t.settings.apiStep2, t.settings.apiStep3]}
+                createKeyLabel={t.settings.createKey}
+                createKeyUrl="https://aistudio.google.com/app/apikey"
+                t={t}
+                onSave={(key, remember) => onSaveApiKey('gemini', key, remember)}
+                onDelete={() => onDeleteApiKey('gemini')}
+              />
+            </div>
+
+            <div id="settings-panel-openai" role="tabpanel" aria-labelledby="settings-tab-openai" hidden={section !== 'openai'}>
+              <ApiKeySettingsPanel
+                provider="openai"
+                apiKey={openAiApiKey}
+                rememberApiKey={rememberOpenAiApiKey}
+                title={t.settings.openAiApiKey}
+                description={t.settings.openAiApiDescription}
+                inputLabel={t.settings.openAiApiInputLabel}
+                placeholder="sk-..."
+                helpTitle={t.settings.openAiHowToGetKey}
+                helpSteps={[t.settings.openAiApiStep1, t.settings.openAiApiStep2, t.settings.openAiApiStep3]}
+                createKeyLabel={t.settings.createOpenAiKey}
+                createKeyUrl="https://platform.openai.com/api-keys"
+                securityNotice={t.settings.openAiTokenNotice}
+                t={t}
+                onSave={(key, remember) => onSaveApiKey('openai', key, remember)}
+                onDelete={() => onDeleteApiKey('openai')}
+              />
+            </div>
+
+            <div id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" hidden={section !== 'appearance'}>
+              <AppearanceSettingsPanel theme={theme} t={t} onThemeChange={onThemeChange} />
+            </div>
+          </div>
         </div>
 
         {isFirstRun && onContinueWithoutKey && (
-          <footer className="shrink-0 border-t border-slate-800 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 [[data-theme=light]_&]:border-slate-200">
+          <footer className="shrink-0 border-t border-slate-800 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5 [[data-theme=light]_&]:border-slate-200">
             <button
               type="button"
               onClick={onContinueWithoutKey}

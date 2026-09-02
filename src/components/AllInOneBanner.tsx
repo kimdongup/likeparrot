@@ -1,6 +1,10 @@
 import { memo } from 'react';
 import { Radio } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
+import type {
+  SoundFirstModelId,
+  SoundFirstModelOption,
+} from '../services/liveTranslation';
 
 interface AllInOneBannerProps {
   isListening: boolean;
@@ -8,6 +12,9 @@ interface AllInOneBannerProps {
   isSpeaking: boolean;
   lastLatencyMs?: number;
   uiLanguageCode: string;
+  selectedModelId: SoundFirstModelId;
+  models: readonly SoundFirstModelOption[];
+  onModelChange: (modelId: SoundFirstModelId) => void;
 }
 
 export const AllInOneBanner = memo(function AllInOneBanner({
@@ -16,8 +23,13 @@ export const AllInOneBanner = memo(function AllInOneBanner({
   isSpeaking,
   lastLatencyMs,
   uiLanguageCode,
+  selectedModelId,
+  models,
+  onModelChange,
 }: AllInOneBannerProps) {
   const t = getUiStrings(uiLanguageCode);
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0];
+  const isActive = isListening || isConnecting;
 
   return (
     <section lang={t.locale} aria-labelledby="sound-first-title" className="sound-first-banner w-full bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/40 rounded-2xl p-3 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-3">
@@ -26,15 +38,26 @@ export const AllInOneBanner = memo(function AllInOneBanner({
 
       {/* Header */}
       <div className="flex items-center justify-between pb-2.5 border-b border-emerald-500/20 text-xs flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <div id="sound-first-title" className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-500/50 font-mono font-bold text-emerald-300">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>{t.modes.audioFirst} · Gemini Live</span>
+            <span>{t.modes.audioFirst}</span>
           </div>
 
-          <span className="text-[11px] text-emerald-200/80 hidden sm:inline">
-            {t.audio.description}
-          </span>
+          <label className="relative min-w-0 max-w-sm flex-1 sm:flex-initial">
+            <span className="sr-only">{t.audio.chooseEngine}</span>
+            <select
+              value={selectedModelId}
+              onChange={(event) => onModelChange(event.target.value as SoundFirstModelId)}
+              disabled={isActive}
+              aria-label={t.audio.chooseEngine}
+              className="h-9 w-full max-w-sm rounded-lg border border-emerald-500/35 bg-slate-950 px-2 pr-8 text-xs font-semibold text-emerald-200 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-emerald-800"
+            >
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>{model.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* Latency */}
@@ -51,6 +74,11 @@ export const AllInOneBanner = memo(function AllInOneBanner({
           </div>
         </div>
       </div>
+
+      <p className="relative text-[11px] text-emerald-200/80 [[data-theme=light]_&]:text-emerald-800">
+        <span className="font-semibold">{t.audio.engine}: {selectedModel.shortLabel}</span>
+        <span className="hidden sm:inline"> · {t.audio.description}</span>
+      </p>
 
       {/* Sequential Flow Diagram */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
