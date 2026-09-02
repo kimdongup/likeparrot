@@ -1,5 +1,6 @@
 import type { TranslationCard } from '../types';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
+import { normalizePipelineTag } from './pipelinePresentation';
 
 const DATABASE_NAME = 'likeparrot';
 const DATABASE_VERSION = 1;
@@ -60,6 +61,7 @@ export const loadTranslationCards = async (): Promise<TranslationCard[]> => {
         sourceLangCode: record.sourceLangCode ?? SUPPORTED_LANGUAGES.find(
           (language) => language.nativeName === record.sourceLang
         )?.code ?? 'ko',
+        pipelineTag: normalizePipelineTag(record.pipelineTag),
         timestamp: new Date(record.timestamp),
       }))
       .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime());
@@ -73,7 +75,11 @@ export const saveTranslationCard = (card: TranslationCard): Promise<void> => enq
   try {
     const transaction = database.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
-    store.put({ ...card, timestamp: card.timestamp.getTime() } satisfies StoredTranslationCard);
+    store.put({
+      ...card,
+      pipelineTag: normalizePipelineTag(card.pipelineTag),
+      timestamp: card.timestamp.getTime(),
+    } satisfies StoredTranslationCard);
 
     const countRequest = store.count();
     countRequest.onsuccess = () => {

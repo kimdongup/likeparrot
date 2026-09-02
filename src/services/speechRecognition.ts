@@ -127,16 +127,16 @@ export class WebSpeechRecognizer {
       if (terminal.includes(code)) this.desiredListening = false;
       if (code === 'not-allowed' || code === 'service-not-allowed') {
         this.onError?.(
-          '마이크 사용 권한이 허용되지 않았습니다. 브라우저 주소창의 사이트 설정에서 마이크를 허용해 주세요.'
+          'Microphone access was denied. Allow microphone access in your browser’s site settings.'
         );
       } else if (code === 'audio-capture') {
-        this.onError?.('사용 가능한 마이크를 찾을 수 없습니다. 오디오 입력 장치를 확인해 주세요.');
+        this.onError?.('No microphone is available. Check your audio input device.');
       } else if (code === 'language-not-supported') {
-        this.onError?.('선택한 언어는 이 브라우저의 음성 인식에서 지원되지 않습니다.');
+        this.onError?.('This browser does not support speech recognition for the selected language.');
       } else if (code === 'network') {
-        this.onError?.('음성 인식 네트워크 연결이 끊어졌습니다. 연결을 확인한 뒤 다시 시작해 주세요.');
+        this.onError?.('The speech recognition connection was interrupted. Check your network and start again.');
       } else {
-        this.onError?.(`음성 인식 오류: ${code}`);
+        this.onError?.(`Speech recognition error: ${code}`);
       }
     };
 
@@ -208,7 +208,7 @@ export class WebSpeechRecognizer {
         } catch (retryError) {
           this.desiredListening = false;
           this.onStateChange?.(false);
-          this.onError?.(`음성 인식을 시작할 수 없습니다: ${String(retryError)}`);
+          this.onError?.(`Could not start speech recognition: ${String(retryError)}`);
         }
       }, 150);
     }
@@ -222,7 +222,7 @@ export class WebSpeechRecognizer {
 
   public start(speechCode?: string): void {
     if (!WebSpeechRecognizer.isSupported()) {
-      this.onError?.('현재 브라우저가 Web Speech API를 지원하지 않습니다. Chrome, Safari 또는 Edge를 사용해 주세요.');
+      this.onError?.('This browser does not support the Web Speech API. Use Chrome, Safari, or Edge.');
       return;
     }
     if (speechCode) this.currentLanguage = speechCode;

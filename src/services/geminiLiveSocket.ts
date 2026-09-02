@@ -68,6 +68,46 @@ interface LiveServerMessage {
   sessionResumptionUpdate?: { resumable?: boolean; newHandle?: string };
 }
 
+interface LiveSetupMessage {
+  setup: {
+    model: string;
+    generationConfig: {
+      responseModalities: ['AUDIO'];
+      translationConfig: {
+        targetLanguageCode: string;
+        echoTargetLanguage: boolean;
+      };
+    };
+    inputAudioTranscription: Record<string, never>;
+    outputAudioTranscription: Record<string, never>;
+    sessionResumption: { handle?: string };
+    contextWindowCompression: { slidingWindow: Record<string, never> };
+  };
+}
+
+/** Build the raw v1beta wire payload without mixing setup and generation fields. */
+const buildLiveSetupMessage = (
+  targetLanguageCode: string,
+  resumeHandle: string | null
+): LiveSetupMessage => ({
+  setup: {
+    model: LIVE_TRANSLATION_MODEL,
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      translationConfig: {
+        targetLanguageCode: toLiveLanguageCode(targetLanguageCode),
+        echoTargetLanguage: false,
+      },
+    },
+    // The raw WebSocket schema places transcription controls on setup itself.
+    // Putting them in generationConfig closes the socket with code 1007.
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+    sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
+    contextWindowCompression: { slidingWindow: {} },
+  },
+});
+
 interface PendingCompletedTurn extends LiveTranslationTurn {
   hasFinalInput: boolean;
   claimedInputStartedAt: number;
@@ -79,7 +119,7 @@ const getAudioContextConstructor = (): AudioContextConstructor => {
     (window as typeof window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext;
 
   if (!AudioCtx) {
-    throw new Error('이 브라우저는 실시간 오디오 처리를 지원하지 않습니다.');
+    throw new Error('This browser does not support real-time audio processing.');
   }
 
   return AudioCtx;
@@ -235,10 +275,10 @@ export class GeminiLiveSocketService {
   ): Promise<void> {
     const cleanKey = apiKey.trim();
     if (!cleanKey) {
-      throw new Error('Gemini API Key가 필요합니다. 상단에서 API 키를 등록해 주세요.');
+      throw new Error('A Gemini API key is required. Add one in Settings.');
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('이 브라우저에서는 마이크 입력을 사용할 수 없습니다. HTTPS 연결을 확인해 주세요.');
+      throw new Error('Microphone input is unavailable. Make sure this page is using HTTPS.');
     }
 
     const startRequest = ++this.startRequestSerial;
@@ -345,7 +385,7 @@ export class GeminiLiveSocketService {
         this.pendingConnectionReject = settleReject;
 
         const timeoutId = window.setTimeout(() => {
-          settleReject(new Error('Gemini Live 연결 시간이 초과되었습니다. 네트워크와 API 키를 확인해 주세요.'));
+          settleReject(new Error('Gemini Live timed out. Check your network connection and API key.'));
           this.cleanup(false, true, preserveTurn, preservePlayback);
         }, CONNECT_TIMEOUT_MS);
 
@@ -353,24 +393,7 @@ export class GeminiLiveSocketService {
           if (generation !== this.connectionGeneration) return;
           this.isConnected = true;
 
-          ws.send(
-            JSON.stringify({
-              setup: {
-                model: LIVE_TRANSLATION_MODEL,
-                generationConfig: {
-                  responseModalities: ['AUDIO'],
-                  inputAudioTranscription: {},
-                  outputAudioTranscription: {},
-                  translationConfig: {
-                    targetLanguageCode: toLiveLanguageCode(targetLanguageCode),
-                    echoTargetLanguage: false,
-                  },
-                },
-                sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
-                contextWindowCompression: { slidingWindow: {} },
-              },
-            })
-          );
+          ws.send(JSON.stringify(buildLiveSetupMessage(targetLanguageCode, resumeHandle)));
         };
 
         ws.onmessage = async (event: MessageEvent) => {
@@ -419,14 +442,11 @@ export class GeminiLiveSocketService {
 
         ws.onerror = () => {
           if (generation !== this.connectionGeneration || this.intentionalClose) return;
-          // An `error` event is followed by `close`. If this session is
-          // resumable, let the close handler reconnect without flashing a
-          // terminal error first.
+          // The following close event carries the API close code and reason.
+          // Keep the promise pending so that diagnostic detail is not replaced
+          // by the browser's generic WebSocket error event.
           if (this.sessionResumptionHandle) return;
           this.callbacks.onStatusChange?.('error');
-          const error = new Error('Gemini Live 연결에 실패했습니다. API 키 권한과 네트워크를 확인해 주세요.');
-          this.callbacks.onError?.(error.message);
-          settleReject(error);
         };
 
         ws.onclose = (event) => {
@@ -457,13 +477,13 @@ export class GeminiLiveSocketService {
             this.reconnectSession();
           } else if (!wasIntentional) {
             this.callbacks.onStatusChange?.('disconnected');
-            const suffix = event.reason ? `: ${event.reason}` : ` (코드 ${event.code})`;
-            const error = new Error(`Gemini Live 연결이 종료되었습니다${suffix}`);
+            const suffix = event.reason ? `: ${event.reason}` : ` (code ${event.code})`;
+            const error = new Error(`Gemini Live disconnected${suffix}`);
             this.callbacks.onError?.(error.message);
             settleReject(error);
           } else if (!settled) {
             this.callbacks.onStatusChange?.('disconnected');
-            settleReject(new Error('Gemini Live 연결이 설정 전에 종료되었습니다.'));
+            settleReject(new Error('Gemini Live disconnected before setup completed.'));
           } else {
             this.callbacks.onStatusChange?.('disconnected');
           }
@@ -1340,7 +1360,7 @@ export class GeminiLiveSocketService {
         this.cleanup(false);
         this.callbacks.onStatusChange?.('error');
         this.callbacks.onError?.(
-          `Gemini Live 세션을 다시 연결하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
+          `Could not reconnect the Gemini Live session: ${error instanceof Error ? error.message : String(error)}`
         );
       });
   }
@@ -1383,7 +1403,7 @@ export class GeminiLiveSocketService {
         this.cleanup(false);
         this.callbacks.onStatusChange?.('error');
         this.callbacks.onError?.(
-          `입력 전사 경계를 재설정하지 못했습니다: ${error instanceof Error ? error.message : String(error)}`
+          `Could not reset the input transcription boundary: ${error instanceof Error ? error.message : String(error)}`
         );
       });
   }

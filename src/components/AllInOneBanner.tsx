@@ -15,7 +15,7 @@ export const AllInOneBanner = memo(function AllInOneBanner({
   lastLatencyMs,
 }: AllInOneBannerProps) {
   return (
-    <section lang="ko" aria-labelledby="sound-first-title" className="sound-first-banner w-full bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/40 rounded-2xl p-3 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-3">
+    <section lang="en" aria-labelledby="sound-first-title" className="sound-first-banner w-full bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/40 rounded-2xl p-3 sm:p-5 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-3">
       {/* Glow Effect */}
       <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-emerald-500/10 via-teal-500/5 to-transparent pointer-events-none" />
 
@@ -24,11 +24,11 @@ export const AllInOneBanner = memo(function AllInOneBanner({
         <div className="flex items-center gap-2">
           <div id="sound-first-title" className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-500/50 font-mono font-bold text-emerald-300">
             <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>소리먼저 · Gemini Live</span>
+            <span>Audio First · Gemini Live</span>
           </div>
 
           <span className="text-[11px] text-emerald-200/80 hidden sm:inline">
-            음성을 바로 번역 음성으로 스트리밍하고 대화를 스크립트에 기록합니다
+            Streams translated audio while you speak and records the conversation
           </span>
         </div>
 
@@ -36,13 +36,13 @@ export const AllInOneBanner = memo(function AllInOneBanner({
         <div className="flex items-center gap-2 font-mono">
           {isConnecting && (
             <span aria-hidden="true" className="text-amber-300 text-[11px] animate-pulse">
-              연결 중...
+              Connecting…
             </span>
           )}
-          <span className="text-slate-400 text-[11px]">입력→첫 번역 출력:</span>
+          <span className="text-slate-400 text-[11px]">Input → first output:</span>
           <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-900 border border-emerald-500/40 text-xs font-bold text-emerald-300">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            <span>{lastLatencyMs && lastLatencyMs > 0 ? `${lastLatencyMs} ms` : '실시간 동기화'}</span>
+            <span>{lastLatencyMs && lastLatencyMs > 0 ? `${lastLatencyMs} ms` : 'Live sync'}</span>
           </div>
         </div>
       </div>
@@ -57,8 +57,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             1
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-emerald-400 font-semibold uppercase">음성 입력</p>
-            <p className="font-medium text-slate-100 truncate">16kHz PCM 스트림</p>
+            <p className="text-[10px] text-emerald-400 font-semibold uppercase">Voice input</p>
+            <p className="font-medium text-slate-100 truncate">16kHz PCM stream</p>
           </div>
         </div>
 
@@ -68,8 +68,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             2
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-teal-400 font-semibold uppercase">AI 실시간 번역</p>
-            <p className="font-medium text-slate-100 truncate">Live 음성 번역</p>
+            <p className="text-[10px] text-teal-400 font-semibold uppercase">Live AI translation</p>
+            <p className="font-medium text-slate-100 truncate">Speech translation</p>
           </div>
         </div>
 
@@ -81,8 +81,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             3
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-violet-400 font-semibold uppercase">즉시 음성 출력</p>
-            <p className="font-medium text-slate-100 truncate">24kHz 번역 음성</p>
+            <p className="text-[10px] text-violet-400 font-semibold uppercase">Instant audio output</p>
+            <p className="font-medium text-slate-100 truncate">24kHz translated audio</p>
           </div>
         </div>
 
@@ -92,8 +92,8 @@ export const AllInOneBanner = memo(function AllInOneBanner({
             4
           </div>
           <div className="truncate">
-            <p className="text-[10px] text-pink-400 font-semibold uppercase">스크립트 기록</p>
-            <p className="font-medium text-slate-100 truncate">텍스트·메타데이터 저장</p>
+            <p className="text-[10px] text-pink-400 font-semibold uppercase">Transcript log</p>
+            <p className="font-medium text-slate-100 truncate">Text and metadata</p>
           </div>
         </div>
       </div>

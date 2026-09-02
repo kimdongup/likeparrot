@@ -115,7 +115,7 @@ export class TranslationService {
             onClauseReady?.(result);
             return {
               translatedText: result,
-              engineName: '⚡ Chrome 내장 Translator',
+              engineName: '⚡ Chrome built-in Translator',
               engineType: 'chrome_nano',
               latencyMs,
             };
@@ -128,7 +128,7 @@ export class TranslationService {
 
       if (targetEngine === 'chrome_nano') {
         throw new TranslationError(
-          '선택한 언어 쌍의 Chrome 내장 번역 모델을 사용할 수 없습니다. 자동 또는 Gemini 번역을 선택해 주세요.'
+          'The Chrome built-in translation model is unavailable for this language pair. Select Automatic or Gemini translation.'
         );
       }
     }
@@ -136,7 +136,7 @@ export class TranslationService {
     if (shouldTryGemini) {
       const cleanKey = apiKey?.trim() ?? '';
       if (!cleanKey && targetEngine === 'gemini_stream') {
-        throw new TranslationError('Gemini 번역을 사용하려면 API 키가 필요합니다.');
+        throw new TranslationError('Gemini translation requires an API key.');
       }
 
       if (cleanKey) {
@@ -153,7 +153,7 @@ export class TranslationService {
           );
           if (result) return result;
           if (targetEngine === 'gemini_stream') {
-            throw new TranslationError('Gemini가 번역 결과를 반환하지 않았습니다. 다시 말씀해 주세요.');
+            throw new TranslationError('Gemini returned no translation. Please speak again.');
           }
         } catch (error) {
           if (signal?.aborted || isAbortError(error)) throw error;
@@ -177,7 +177,7 @@ export class TranslationService {
 
     if (!networkResult) {
       throw new TranslationError(
-        '사용 가능한 번역 엔진이 없습니다. 네트워크 연결 또는 Gemini API 키를 확인해 주세요.'
+        'No translation engine is available. Check your network connection or Gemini API key.'
       );
     }
 
@@ -186,7 +186,7 @@ export class TranslationService {
     onClauseReady?.(networkResult);
     return {
       translatedText: networkResult,
-      engineName: '🌐 네트워크 번역 폴백',
+      engineName: '🌐 Network translation fallback',
       engineType: 'network_fallback',
       latencyMs,
     };
@@ -248,7 +248,7 @@ export class TranslationService {
       } catch (error) {
         if (signal?.aborted) throw error;
         if (timedOut) {
-          throw new TranslationError('Gemini 번역 응답 시간이 초과되었습니다.', true);
+          throw new TranslationError('The Gemini translation request timed out.', true);
         }
         throw error;
       }
@@ -259,9 +259,9 @@ export class TranslationService {
           const body = await response.json();
           detail = body?.error?.message ? `: ${body.error.message}` : '';
         } catch {}
-        throw new TranslationError(`Gemini 번역 요청 실패 (${response.status})${detail}`, true);
+        throw new TranslationError(`Gemini translation request failed (${response.status})${detail}`, true);
       }
-      if (!response.body) throw new TranslationError('Gemini 스트리밍 응답 본문이 없습니다.', true);
+      if (!response.body) throw new TranslationError('The Gemini streaming response has no body.', true);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -313,14 +313,14 @@ export class TranslationService {
         if (timedOut) {
           throw new TranslationError(
             accumulated.trim()
-              ? 'Gemini 번역 스트림이 응답 도중 시간 초과되었습니다. 다시 말씀해 주세요.'
-              : 'Gemini 번역 응답 시간이 초과되었습니다.',
+              ? 'The Gemini translation stream timed out mid-response. Please speak again.'
+              : 'The Gemini translation request timed out.',
             !accumulated.trim()
           );
         }
         if (isAbortError(error)) throw error;
         if (accumulated.trim()) {
-          throw new TranslationError('Gemini 번역 스트림이 응답 도중 끊어졌습니다. 다시 말씀해 주세요.');
+          throw new TranslationError('The Gemini translation stream ended mid-response. Please speak again.');
         }
         throw error;
       } finally {
@@ -328,9 +328,9 @@ export class TranslationService {
       }
 
       if (finishReason !== 'STOP') {
-        const reasonLabel = finishReason ?? '응답 조기 종료';
+        const reasonLabel = finishReason ?? 'response ended early';
         throw new TranslationError(
-          `Gemini 번역이 정상 완료되지 않았습니다 (${reasonLabel}). 다시 말씀해 주세요.`,
+          `Gemini translation did not complete normally (${reasonLabel}). Please speak again.`,
           !accumulated.trim()
         );
       }
@@ -341,7 +341,7 @@ export class TranslationService {
 
       return {
         translatedText,
-        engineName: '🌊 Gemini 3.5 Flash-Lite (실시간 스트리밍)',
+        engineName: '🌊 Gemini 3.5 Flash-Lite (live streaming)',
         engineType: 'gemini_stream',
         latencyMs: Math.round(performance.now() - startTime),
       };

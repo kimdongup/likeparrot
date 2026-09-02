@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowRight,
   Check,
   CheckCircle2,
   ExternalLink,
@@ -14,6 +15,11 @@ import {
   X,
 } from 'lucide-react';
 import type { ThemePreference } from '../services/preferences';
+import type { LanguageOption } from '../types';
+import { LanguageFlagSelect } from './LanguageFlagSelect';
+
+const getEnglishLanguageName = (language: LanguageOption): string =>
+  language.name.replace(/\s*\([^)]*[\u3131-\uD79D][^)]*\)\s*$/u, '').trim();
 
 type ActionResult = boolean | void | Promise<boolean | void>;
 
@@ -26,6 +32,10 @@ interface SettingsModalProps {
   onDeleteApiKey: () => ActionResult;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  sourceLanguage: LanguageOption;
+  targetLanguage: LanguageOption;
+  onSourceLanguageChange: (language: LanguageOption) => void;
+  onTargetLanguageChange: (language: LanguageOption) => void;
   isFirstRun?: boolean;
   onContinueWithoutKey?: () => void;
 }
@@ -38,9 +48,9 @@ const themeOptions: Array<{
   description: string;
   Icon: typeof Sun;
 }> = [
-  { value: 'light', label: '밝게', description: '항상 밝은 화면', Icon: Sun },
-  { value: 'dark', label: '어둡게', description: '항상 어두운 화면', Icon: Moon },
-  { value: 'system', label: '시스템', description: '기기 설정과 맞춤', Icon: Monitor },
+  { value: 'light', label: 'Light', description: 'Always use the light theme', Icon: Sun },
+  { value: 'dark', label: 'Dark', description: 'Always use the dark theme', Icon: Moon },
+  { value: 'system', label: 'System', description: 'Match your device setting', Icon: Monitor },
 ];
 
 export function SettingsModal({ isOpen, ...dialogProps }: SettingsModalProps) {
@@ -55,6 +65,10 @@ function SettingsDialog({
   onDeleteApiKey,
   theme,
   onThemeChange,
+  sourceLanguage,
+  targetLanguage,
+  onSourceLanguageChange,
+  onTargetLanguageChange,
   isFirstRun = false,
   onContinueWithoutKey,
 }: SettingsDialogProps) {
@@ -66,7 +80,8 @@ function SettingsDialog({
   const [actionError, setActionError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const shouldFocusApiKeyRef = useRef(isFirstRun || !apiKey);
+  const firstRunAtOpenRef = useRef(isFirstRun);
+  const shouldFocusApiKeyRef = useRef(!isFirstRun && !apiKey);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const savedTimerRef = useRef<number | null>(null);
@@ -82,8 +97,9 @@ function SettingsDialog({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => {
-      if (shouldFocusApiKeyRef.current) inputRef.current?.focus();
-      else dialogRef.current?.focus();
+      if (firstRunAtOpenRef.current) dialogRef.current?.focus({ preventScroll: true });
+      else if (shouldFocusApiKeyRef.current) inputRef.current?.focus();
+      else dialogRef.current?.focus({ preventScroll: true });
     }, 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -95,7 +111,7 @@ function SettingsDialog({
       if (event.key !== 'Tab' || !dialogRef.current) return;
 
       const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
       )].filter((element) => !element.hasAttribute('hidden') && element.tabIndex >= 0);
       if (!focusable.length) {
         event.preventDefault();
@@ -138,7 +154,7 @@ function SettingsDialog({
       const result = await onSaveApiKey(cleanKey, rememberOnDevice);
       if (result === false) {
         setRememberOnDevice(rememberApiKey);
-        setActionError('키는 현재 탭에 적용됐을 수 있지만 저장 옵션을 완료하지 못했습니다. 브라우저 저장소 설정을 확인해 주세요.');
+        setActionError('The key may be active for this tab, but the storage preference could not be saved. Check your browser storage settings.');
         setSaveState('idle');
         return;
       }
@@ -150,7 +166,7 @@ function SettingsDialog({
         setSaveState('idle');
       }, 1800);
     } catch {
-      setActionError('API 키 저장 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      setActionError('The API key could not be saved. Please try again.');
       setSaveState('idle');
     }
   };
@@ -166,7 +182,7 @@ function SettingsDialog({
         setRememberOnDevice(false);
         setShowKey(false);
         setSaveState('idle');
-        setActionError('API 키를 완전히 삭제하지 못했습니다. 브라우저 사이트 데이터를 확인해 주세요.');
+        setActionError('The API key could not be removed completely. Check this site’s browser data.');
         return;
       }
       setInputKey('');
@@ -175,7 +191,7 @@ function SettingsDialog({
       setSaveState('idle');
       inputRef.current?.focus();
     } catch {
-      setActionError('API 키 삭제 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      setActionError('The API key could not be deleted. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -205,7 +221,7 @@ function SettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 backdrop-blur-sm sm:items-center sm:p-5"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 pl-[max(0px,env(safe-area-inset-left))] pr-[max(0px,env(safe-area-inset-right))] backdrop-blur-sm sm:items-center sm:py-5 sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -217,31 +233,31 @@ function SettingsDialog({
         aria-labelledby="settings-title"
         aria-describedby={isFirstRun ? 'settings-first-run-description' : undefined}
         tabIndex={-1}
-        lang="ko"
+        lang="en"
         className="settings-panel flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl outline-none sm:max-w-xl sm:rounded-3xl [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-950"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-800 px-5 py-4 sm:px-6 [[data-theme=light]_&]:border-slate-200">
           <div className="min-w-0">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-400">
-              {isFirstRun ? '처음 시작하기' : 'LikeParrot'}
+              {isFirstRun ? 'Getting started' : 'LikeParrot'}
             </p>
             <h2 id="settings-title" className="text-balance text-lg font-bold tracking-tight sm:text-xl">
-              {isFirstRun ? 'Gemini API 키를 먼저 연결해 주세요' : '설정'}
+              {isFirstRun ? 'Connect your Gemini API key' : 'Settings'}
             </h2>
             {isFirstRun && (
               <p
                 id="settings-first-run-description"
                 className="mt-1.5 max-w-md text-sm leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600"
               >
-                소리먼저와 Gemini 번역을 사용하려면 개인 API 키가 필요합니다.
-                키 없이도 글먼저의 기기 내장·네트워크 번역은 사용할 수 있습니다.
+                Audio First and Gemini translation require a personal API key.
+                You can still use Text First with on-device or network translation without one.
               </p>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="설정 닫기"
+            aria-label="Close settings"
             className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -254,19 +270,70 @@ function SettingsDialog({
             : 'pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6'
         }`}>
           <form onSubmit={handleSave} autoComplete="off" className="space-y-6">
+            <section aria-labelledby="languages-heading" className="space-y-3">
+              <h3 id="languages-heading" className="text-sm font-bold">Languages</h3>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50">
+                <div className="min-w-0">
+                  <label
+                    id="settings-source-language-label"
+                    htmlFor="settings-source-language"
+                    className="mb-1.5 block text-[11px] font-semibold text-slate-400 [[data-theme=light]_&]:text-slate-600"
+                  >
+                    I speak<span className="sr-only"> — source language</span>
+                  </label>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <LanguageFlagSelect
+                      id="settings-source-language"
+                      label="Source language"
+                      labelledBy="settings-source-language-label"
+                      selectedLanguage={sourceLanguage}
+                      onLanguageChange={onSourceLanguageChange}
+                    />
+                    <span className="min-w-0 truncate text-xs font-semibold text-slate-300 [[data-theme=light]_&]:text-slate-700">
+                      {getEnglishLanguageName(sourceLanguage)}
+                    </span>
+                  </div>
+                </div>
+
+                <ArrowRight className="mb-5 h-4 w-4 shrink-0 text-indigo-400" aria-hidden="true" />
+
+                <div className="min-w-0">
+                  <label
+                    id="settings-target-language-label"
+                    htmlFor="settings-target-language"
+                    className="mb-1.5 block text-[11px] font-semibold text-slate-400 [[data-theme=light]_&]:text-slate-600"
+                  >
+                    Translate to<span className="sr-only"> — translation and speech language</span>
+                  </label>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <LanguageFlagSelect
+                      id="settings-target-language"
+                      label="Translation and speech language"
+                      labelledBy="settings-target-language-label"
+                      selectedLanguage={targetLanguage}
+                      onLanguageChange={onTargetLanguageChange}
+                    />
+                    <span className="min-w-0 truncate text-xs font-semibold text-slate-300 [[data-theme=light]_&]:text-slate-700">
+                      {getEnglishLanguageName(targetLanguage)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section aria-labelledby="api-key-heading" className="space-y-3">
               <div className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-indigo-400" aria-hidden="true" />
-                <h3 id="api-key-heading" className="text-sm font-bold">Gemini API 키</h3>
+                <h3 id="api-key-heading" className="text-sm font-bold">Gemini API key</h3>
                 {apiKey && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400 [[data-theme=light]_&]:text-emerald-700">
-                    <Check className="h-3 w-3" aria-hidden="true" /> 저장됨
+                    <Check className="h-3 w-3" aria-hidden="true" /> Saved
                   </span>
                 )}
               </div>
 
               <div className="relative">
-                <label htmlFor="settings-api-key" className="sr-only">Google AI Studio API 키</label>
+                <label htmlFor="settings-api-key" className="sr-only">Google AI Studio API key</label>
                 <input
                   ref={inputRef}
                   id="settings-api-key"
@@ -288,7 +355,7 @@ function SettingsDialog({
                 <button
                   type="button"
                   onClick={() => setShowKey((visible) => !visible)}
-                  aria-label={showKey ? 'API 키 숨기기' : 'API 키 보기'}
+                  aria-label={showKey ? 'Hide API key' : 'Show API key'}
                   aria-pressed={showKey}
                   className="absolute right-1 top-0 flex h-12 w-11 items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:text-slate-900"
                 >
@@ -300,12 +367,12 @@ function SettingsDialog({
 
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-600">
                 <p className="mb-2 font-semibold text-slate-200 [[data-theme=light]_&]:text-slate-800">
-                  API 키 가져오는 방법
+                  How to get an API key
                 </p>
                 <ol className="list-decimal space-y-1 pl-4">
-                  <li>아래 링크로 Google AI Studio를 엽니다.</li>
-                  <li>Google 계정으로 로그인하고 <span lang="en">Create API key</span>를 선택합니다.</li>
-                  <li>생성된 키를 복사해 위 입력란에 붙여넣고 저장합니다.</li>
+                  <li>Open Google AI Studio using the link below.</li>
+                  <li>Sign in with your Google account and select <strong>Create API key</strong>.</li>
+                  <li>Copy the generated key, paste it above, and save it.</li>
                 </ol>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -313,7 +380,7 @@ function SettingsDialog({
                   rel="noreferrer"
                   className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg font-semibold text-indigo-400 underline-offset-4 hover:text-indigo-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:text-indigo-700"
                 >
-                  Google AI Studio에서 API 키 만들기
+                  Create an API key in Google AI Studio
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </a>
               </div>
@@ -322,9 +389,9 @@ function SettingsDialog({
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <p>
                   {rememberOnDevice
-                    ? '키가 이 브라우저에 계속 저장됩니다. 공유 기기에서는 선택하지 마세요. '
-                    : '키는 이 탭의 세션에만 저장됩니다. 탭을 닫으면 다시 입력해야 합니다. '}
-                  공개 서비스는 브라우저에 장기 키를 넣지 말고 백엔드 임시 토큰을 사용해야 합니다.
+                    ? 'The key stays in this browser. Do not enable this on a shared device. '
+                    : 'The key is stored only for this tab session. You will need to enter it again after closing the tab. '}
+                  Public deployments should use short-lived backend tokens instead of placing a long-lived key in the browser.
                 </p>
               </div>
 
@@ -340,8 +407,8 @@ function SettingsDialog({
                   className="h-5 w-5 shrink-0 accent-indigo-600"
                 />
                 <span>
-                  <span className="block font-semibold">이 기기에 API 키 기억하기</span>
-                  <span className="block text-xs text-slate-500 [[data-theme=light]_&]:text-slate-600">개인 기기에서만 사용하세요.</span>
+                  <span className="block font-semibold">Remember the API key on this device</span>
+                  <span className="block text-xs text-slate-400 [[data-theme=light]_&]:text-slate-600">Use this only on a personal device.</span>
                 </span>
               </label>
 
@@ -351,9 +418,9 @@ function SettingsDialog({
                   disabled={!inputKey.trim() || saveState === 'saving' || isDeleting}
                   className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-lg shadow-indigo-900/20 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                 >
-                  {saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? (
-                    <><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> 저장됨</>
-                  ) : 'API 키 저장'}
+                  {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? (
+                    <><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Saved</>
+                  ) : 'Save API key'}
                 </button>
                 {(apiKey || inputKey) && (
                   <button
@@ -362,11 +429,11 @@ function SettingsDialog({
                     disabled={saveState === 'saving' || isDeleting}
                     className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/10 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50 [[data-theme=light]_&]:text-rose-700"
                   >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" /> {isDeleting ? '삭제 중…' : '키 삭제'}
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> {isDeleting ? 'Deleting…' : 'Delete key'}
                   </button>
                 )}
                 <span className="sr-only" role="status" aria-live="polite">
-                  {saveState === 'saved' ? 'API 키가 저장되었습니다.' : ''}
+                  {saveState === 'saved' ? 'The API key has been saved.' : ''}
                 </span>
               </div>
               {actionError && (
@@ -377,7 +444,7 @@ function SettingsDialog({
             </section>
 
             <section aria-labelledby="theme-heading" className="border-t border-slate-800 pt-5 [[data-theme=light]_&]:border-slate-200">
-              <h3 id="theme-heading" className="mb-3 text-sm font-bold">화면 테마</h3>
+              <h3 id="theme-heading" className="mb-3 text-sm font-bold">Appearance</h3>
               <div role="radiogroup" aria-labelledby="theme-heading" className="grid grid-cols-3 gap-2">
                 {themeOptions.map(({ value, label, description, Icon }, index) => {
                   const selected = theme === value;
@@ -414,7 +481,7 @@ function SettingsDialog({
               onClick={onContinueWithoutKey}
               className="min-h-11 w-full rounded-xl text-sm font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-900"
             >
-              API 키 없이 글먼저로 계속하기
+              Continue to Text First without an API key
             </button>
           </footer>
         )}

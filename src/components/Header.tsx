@@ -12,6 +12,10 @@ import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { getUiStrings } from '../constants/translations';
 import type { LanguageOption } from '../types';
 
+const ENGLISH_UI = getUiStrings('en');
+const getEnglishLanguageName = (language: LanguageOption): string =>
+  language.name.replace(/\s*\([^)]*[\u3131-\uD79D][^)]*\)\s*$/u, '').trim();
+
 interface HeaderProps {
   isListening: boolean;
   isConnecting: boolean;
@@ -68,7 +72,7 @@ export const Header = memo(function Header({
   selectedSourceLang,
   onSourceLangChange,
 }: HeaderProps) {
-  const t = getUiStrings(selectedSourceLang.code);
+  const t = ENGLISH_UI;
   const isActive = isListening || isConnecting;
   const activityStatus = isSpeaking
     ? t.speaking
@@ -82,7 +86,7 @@ export const Header = memo(function Header({
     <div
       className="flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain py-1 scrollbar-none"
       role="group"
-      aria-label="내가 말하는 언어"
+      aria-label="Source language"
     >
       {SUPPORTED_LANGUAGES.map((language) => {
         const selected = selectedSourceLang.code === language.code;
@@ -92,16 +96,16 @@ export const Header = memo(function Header({
             key={language.code}
             onClick={() => onSourceLangChange(language)}
             disabled={isActive}
-            title={`내가 말하는 언어: ${language.name}`}
+            title={`Source language: ${getEnglishLanguageName(language)}`}
+            aria-label={`Source language: ${getEnglishLanguageName(language)}`}
             aria-pressed={selected}
-            className={`flex min-h-11 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border p-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
               selected
                 ? 'border-indigo-400/50 bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
                 : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-700 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950'
             } disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            <span aria-hidden="true">{language.flag}</span>
-            <span className="text-[11px]" lang={language.code}>{language.nativeName}</span>
+            <span className="text-4xl leading-none" aria-hidden="true">{language.flag}</span>
           </button>
         );
       })}
@@ -115,9 +119,9 @@ export const Header = memo(function Header({
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="group flex min-w-0 shrink-0 items-center gap-2 text-left focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            aria-label="LikeParrot 글먼저 화면으로 이동"
-            lang="ko"
+            className="group flex min-h-11 min-w-11 shrink-0 items-center gap-2 text-left focus-visible:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            aria-label="Go to LikeParrot Text First"
+            lang="en"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-500 to-pink-500 text-base font-bold text-white shadow-md shadow-indigo-500/20 transition-transform group-hover:scale-105">
               🦜
@@ -130,7 +134,7 @@ export const Header = memo(function Header({
                     ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400 [[data-theme=light]_&]:text-emerald-700'
                     : 'border-indigo-500/30 bg-indigo-500/15 text-indigo-400 [[data-theme=light]_&]:text-indigo-700'
                 }`}>
-                  {isAllInOnePage ? '소리먼저' : '글먼저'}
+                  {isAllInOnePage ? 'Audio First' : 'Text First'}
                 </span>
               </span>
               <span className="hidden max-w-[15rem] truncate text-[10px] text-slate-400 lg:block [[data-theme=light]_&]:text-slate-500">
@@ -166,7 +170,7 @@ export const Header = memo(function Header({
             <button
               type="button"
               onClick={() => onNavigate(isAllInOnePage ? '/' : '/all_in_one')}
-              title={isAllInOnePage ? '글먼저로 전환' : '소리먼저로 전환'}
+              title={isAllInOnePage ? 'Switch to Text First' : 'Switch to Audio First'}
               className={`flex h-11 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 isAllInOnePage
                   ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-800 [[data-theme=light]_&]:hover:bg-slate-100'
@@ -176,13 +180,13 @@ export const Header = memo(function Header({
               {isAllInOnePage
                 ? <FileText className="h-4 w-4" aria-hidden="true" />
                 : <Zap className="h-4 w-4" aria-hidden="true" />}
-              <span>{isAllInOnePage ? '글먼저' : '소리먼저'}</span>
+              <span>{isAllInOnePage ? 'Text First' : 'Audio First'}</span>
             </button>
 
             {onSaveTranscript && (
               <HeaderIconButton
-                label="스크립트를 HTML로 저장"
-                title={canSaveTranscript ? '대화 스크립트를 HTML로 저장' : '저장할 대화가 없습니다'}
+                label="Save transcript as HTML"
+                title={canSaveTranscript ? 'Save the conversation transcript as HTML' : 'There is no transcript to save'}
                 onClick={onSaveTranscript}
                 disabled={!canSaveTranscript}
               >
@@ -192,8 +196,8 @@ export const Header = memo(function Header({
 
             <div className="relative">
               <HeaderIconButton
-                label={hasApiKey ? '설정 열기' : '설정 열기, Gemini API 키 필요'}
-                title="테마와 Gemini API 키 설정"
+                label={hasApiKey ? 'Open settings' : 'Open settings; Gemini API key required'}
+                title="Theme and Gemini API key settings"
                 onClick={onOpenSettings}
               >
                 <Settings className="h-4.5 w-4.5" aria-hidden="true" />

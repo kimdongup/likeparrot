@@ -1,4 +1,6 @@
 import type { TranslationCard } from '../types';
+import { getEnglishLanguageNameByCode } from '../constants/languages';
+import { normalizePipelineTag } from './pipelinePresentation';
 
 export interface TranscriptExportOptions {
   title?: string;
@@ -25,9 +27,9 @@ const safeDate = (value: Date): Date => {
 
 const formatDate = (date: Date, locale?: string): string => {
   try {
-    return date.toLocaleString(locale);
+    return date.toLocaleString(locale ?? 'en-US');
   } catch {
-    return date.toLocaleString();
+    return date.toLocaleString('en-US');
   }
 };
 
@@ -62,15 +64,21 @@ const renderEntry = (card: TranslationCard, index: number, locale?: string): str
   const timestamp = safeDate(card.timestamp);
   const sourceLanguageCode = safeLanguageCode(card.sourceLangCode);
   const targetLanguageCode = safeLanguageCode(card.targetLangCode);
-  const sourceTextLanguage = card.sourceText === '(원문 전사 없음)'
-    ? 'ko'
-    : sourceLanguageCode;
+  const sourceTranscriptUnavailable = card.sourceText === '(Source transcript unavailable)' ||
+    card.sourceText === '(원문 전사 없음)';
+  const sourceTextLanguage = sourceTranscriptUnavailable ? 'en' : sourceLanguageCode;
+  const sourceText = sourceTranscriptUnavailable
+    ? '(Source transcript unavailable)'
+    : card.sourceText;
+  const sourceLanguageName = getEnglishLanguageNameByCode(sourceLanguageCode);
+  const targetLanguageName = getEnglishLanguageNameByCode(targetLanguageCode);
   const sequence = String(index + 1).padStart(3, '0');
   const latency = card.latencyMs !== undefined && card.latencyMs > 0
     ? `<span>${Math.round(card.latencyMs)}ms</span>`
     : '';
-  const pipeline = card.pipelineTag
-    ? `<span class="pipeline">${escapeHtml(card.pipelineTag)}</span>`
+  const pipelineTag = normalizePipelineTag(card.pipelineTag);
+  const pipeline = pipelineTag
+    ? `<span class="pipeline">${escapeHtml(pipelineTag)}</span>`
     : '';
 
   return `
@@ -78,24 +86,24 @@ const renderEntry = (card: TranslationCard, index: number, locale?: string): str
           <article class="entry" data-expanded="false">
             <button class="entry__source" type="button" data-action="toggle" aria-expanded="false">
               <span class="prompt" aria-hidden="true">${sequence} &lt;</span>
-              <span lang="${sourceTextLanguage}">${escapeHtml(card.sourceText)}</span>
+              <span lang="${sourceTextLanguage}">${escapeHtml(sourceText)}</span>
             </button>
-            <button class="entry__translation" type="button" data-action="speak" lang="${targetLanguageCode}" aria-label="번역문 읽기: ${escapeHtml(card.translatedText)}">
+            <button class="entry__translation" type="button" data-action="speak" aria-label="Read translation aloud: ${escapeHtml(card.translatedText)}">
               <span class="prompt prompt--translation" aria-hidden="true">&gt;</span>
-              <span data-translation>${escapeHtml(card.translatedText)}</span>
+              <span data-translation lang="${targetLanguageCode}">${escapeHtml(card.translatedText)}</span>
               <span class="speaking-mark" aria-hidden="true">◉</span>
             </button>
             <div class="entry__details">
               <div class="metadata">
-                <span><span lang="${sourceLanguageCode}">${escapeHtml(card.sourceLang)}</span> → <span lang="${targetLanguageCode}">${escapeHtml(card.targetLang)}</span></span>
+                <span>${escapeHtml(sourceLanguageName)} → ${escapeHtml(targetLanguageName)}</span>
                 <time datetime="${escapeHtml(timestamp.toISOString())}">${escapeHtml(formatDate(timestamp, locale))}</time>
                 ${pipeline}
                 ${latency}
               </div>
-              <div class="actions" lang="ko">
-                <button type="button" data-action="speak" aria-label="번역문 읽기">읽기</button>
-                <button type="button" data-action="stop" aria-label="음성 정지">정지</button>
-                <button type="button" data-action="copy" aria-label="번역문 복사">복사</button>
+              <div class="actions" lang="en">
+                <button type="button" data-action="speak" aria-label="Read translation aloud">Read</button>
+                <button type="button" data-action="stop" aria-label="Stop speech">Stop</button>
+                <button type="button" data-action="copy" aria-label="Copy translation">Copy</button>
               </div>
             </div>
           </article>
@@ -106,14 +114,14 @@ export function buildTranscriptHtml(
   cards: TranslationCard[],
   options: TranscriptExportOptions = {}
 ): string {
-  const title = options.title?.trim() || 'LikeParrot 번역 기록';
+  const title = options.title?.trim() || 'LikeParrot Translation Transcript';
   const entries = [...cards]
     .reverse()
     .map((card, index) => renderEntry(card, index, options.locale))
     .join('');
 
   return `<!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -167,7 +175,8 @@ export function buildTranscriptHtml(
       grid-template-columns: 3.2rem minmax(0, 1fr) auto;
       width: 100%;
       border: 0;
-      padding: 0;
+      min-height: 2.75rem;
+      padding: .35rem 0;
       background: transparent;
       color: inherit;
       text-align: left;
@@ -248,9 +257,9 @@ export function buildTranscriptHtml(
   <main>
     <header>
       <h1>${escapeHtml(title)}</h1>
-      <span>${cards.length}개 기록</span>
+      <span>${cards.length} ${cards.length === 1 ? 'entry' : 'entries'}</span>
     </header>
-    ${entries ? `<ol>${entries}\n      </ol>` : '<p class="empty">$ 저장된 번역 기록이 없습니다.</p>'}
+    ${entries ? `<ol>${entries}\n      </ol>` : '<p class="empty">$ No saved translation transcript.</p>'}
   </main>
   <div id="status" role="status" aria-live="polite"></div>
   <script>
@@ -292,10 +301,9 @@ export function buildTranscriptHtml(
 
       const speak = (entry) => {
         const translation = entry.querySelector('[data-translation]');
-        const translationButton = entry.querySelector('.entry__translation');
         const text = translation ? translation.textContent.trim() : '';
         if (!text || !('speechSynthesis' in window)) {
-          showStatus('이 브라우저에서는 음성 읽기를 지원하지 않습니다.');
+          showStatus('This browser does not support text-to-speech.');
           return;
         }
         const needsCancel = Boolean(
@@ -312,7 +320,7 @@ export function buildTranscriptHtml(
           speechTimer = 0;
           if (generation !== speechGeneration) return;
           const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = translationButton.getAttribute('lang') || 'und';
+          utterance.lang = translation.getAttribute('lang') || 'und';
           let finished = false;
           const finish = (error) => {
             if (finished || generation !== speechGeneration) return;
@@ -322,14 +330,14 @@ export function buildTranscriptHtml(
             entry.dataset.speaking = 'false';
             if (speakingEntry === entry) speakingEntry = null;
             if (error && error !== 'canceled' && error !== 'interrupted') {
-              showStatus('음성 읽기에 실패했습니다. 기기의 TTS 설정을 확인해 주세요.');
+              showStatus('Speech playback failed. Check your device TTS settings.');
             }
           };
           utterance.onstart = () => {
             if (generation !== speechGeneration) return;
             speakingEntry = entry;
             entry.dataset.speaking = 'true';
-            showStatus('번역문을 읽고 있습니다.');
+            showStatus('Reading the translation aloud.');
           };
           utterance.onend = () => finish();
           utterance.onerror = (event) => finish(event.error || 'unknown');
@@ -370,9 +378,9 @@ export function buildTranscriptHtml(
             field.remove();
             if (!copied) throw new Error('copy failed');
           }
-          showStatus('번역문을 복사했습니다.');
+          showStatus('Translation copied.');
         } catch {
-          showStatus('번역문을 복사하지 못했습니다.');
+          showStatus('Could not copy the translation.');
         }
       };
 

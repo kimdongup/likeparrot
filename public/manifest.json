@@ -1,7 +1,7 @@
 {
-  "name": "LikeParrot - 소리먼저 · 글먼저",
+  "name": "LikeParrot - Audio First · Text First",
   "short_name": "LikeParrot",
-  "description": "소리먼저 실시간 음성 번역과 글먼저 파이프라인 번역을 스크립트로 기록하고 읽어주는 PWA",
+  "description": "A fast PWA that translates speech, plays it in the target language, and saves a readable transcript.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

@@ -88,7 +88,7 @@ export class SpeechService {
       return;
     }
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      const error = new Error('TTS가 지원되지 않는 브라우저입니다.');
+      const error = new Error('This browser does not support text-to-speech.');
       onError?.(error);
       onEnd?.();
       return;
@@ -129,7 +129,7 @@ export class SpeechService {
           try {
             window.speechSynthesis.cancel();
           } catch {}
-          finish(new Error('TTS 완료 신호를 받지 못해 재생을 종료했습니다.'));
+          finish(new Error('TTS did not report completion, so playback was stopped.'));
         });
         window.speechSynthesis.speak(utterance);
       } catch (error) {
@@ -182,7 +182,7 @@ export class SpeechService {
     this.isQueueRunning = true;
     this.activeQueueItem = item;
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      const error = new Error('TTS가 지원되지 않는 브라우저입니다.');
+      const error = new Error('This browser does not support text-to-speech.');
       item.onError?.(error);
       item.onEnd?.();
       this.processQueue();
@@ -229,7 +229,7 @@ export class SpeechService {
         try {
           window.speechSynthesis.cancel();
         } catch {}
-        finish(new Error('TTS 완료 신호를 받지 못해 다음 구절로 이동합니다.'), true);
+        finish(new Error('TTS did not report completion. Moving to the next phrase.'), true);
       });
       window.speechSynthesis.speak(utterance);
     } catch (error) {

@@ -15,8 +15,13 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { FocusEvent as ReactFocusEvent } from 'react';
+import type {
+  FocusEvent as ReactFocusEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
+import { getEnglishLanguageNameByCode } from '../constants/languages';
 import { getUiStrings } from '../constants/translations';
+import { normalizePipelineTag } from '../services/pipelinePresentation';
 import type { TranslationCard } from '../types';
 
 export interface TranscriptTerminalProps {
@@ -83,6 +88,11 @@ const TranscriptRow = memo(function TranscriptRow({
     selected === null && (hovered || focused)
   );
   const detailId = `transcript-detail-${card.id.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
+  const sourceTranscriptUnavailable = card.sourceText === '(Source transcript unavailable)' ||
+    card.sourceText === '(원문 전사 없음)';
+  const sourceLanguageName = getEnglishLanguageNameByCode(card.sourceLangCode);
+  const targetLanguageName = getEnglishLanguageNameByCode(card.targetLangCode);
+  const pipelineTag = normalizePipelineTag(card.pipelineTag);
 
   useEffect(() => () => {
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
@@ -95,8 +105,15 @@ const TranscriptRow = memo(function TranscriptRow({
     }
   };
 
-  const handleToggle = () => {
-    setSelected((current) => current === true ? false : true);
+  const handleToggle = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (event.detail > 0) {
+      // Pointer focus fires before click. Toggle the explicit tap state so the
+      // focus-induced preview cannot immediately close the first pointer tap.
+      setSelected((current) => current === true ? false : true);
+    } else {
+      // Keyboard activation happens after focus has already expanded the row.
+      setSelected(!isExpanded);
+    }
     window.requestAnimationFrame(() => {
       rowRef.current?.scrollIntoView({ block: 'nearest' });
     });
@@ -140,8 +157,8 @@ const TranscriptRow = memo(function TranscriptRow({
           onClick={handleToggle}
           className="block w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-400"
         >
-          <span className="sr-only" lang="ko">
-            {isExpanded ? '기록 세부 정보 닫기' : '기록 세부 정보와 동작 열기'}
+          <span className="sr-only" lang="en">
+            {isExpanded ? 'Hide transcript details' : 'Show transcript details and actions'}
           </span>
           <span className="flex items-start gap-2 text-[13px] leading-6 text-slate-400 sm:text-sm [[data-theme=light]_&]:text-slate-600">
             <span className="w-10 shrink-0 select-none text-right text-slate-600 [[data-theme=light]_&]:text-slate-400" aria-hidden="true">
@@ -149,9 +166,9 @@ const TranscriptRow = memo(function TranscriptRow({
             </span>
             <span
               className="min-w-0 whitespace-pre-wrap break-words"
-              lang={card.sourceText === '(원문 전사 없음)' ? 'ko' : card.sourceLangCode}
+              lang={sourceTranscriptUnavailable ? 'en' : card.sourceLangCode}
             >
-              {card.sourceText}
+              {sourceTranscriptUnavailable ? '(Source transcript unavailable)' : card.sourceText}
             </span>
           </span>
           <span className="mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 text-slate-100 sm:text-base [[data-theme=light]_&]:text-slate-900">
@@ -165,23 +182,23 @@ const TranscriptRow = memo(function TranscriptRow({
           </span>
         </button>
 
-        {isExpanded && (
-          <div
-            id={detailId}
-            className="ml-0 mt-2 flex flex-col gap-2 border-l border-slate-700 pl-3 text-[11px] text-slate-500 sm:ml-12 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:text-slate-600"
-          >
+        <div
+          id={detailId}
+          hidden={!isExpanded}
+          className="ml-0 mt-2 flex flex-col gap-2 border-l border-slate-700 pl-3 text-[11px] text-slate-400 sm:ml-12 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:text-slate-600"
+        >
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <span>
-                <span lang={card.sourceLangCode}>{card.sourceLang}</span>
+                <span lang="en">{sourceLanguageName}</span>
                 {' → '}
-                <span lang={card.targetLangCode}>{card.targetLang}</span>
+                <span lang="en">{targetLanguageName}</span>
               </span>
               <time dateTime={card.timestamp.toISOString()}>
-                {card.timestamp.toLocaleString()}
+                {card.timestamp.toLocaleString('en-US')}
               </time>
-              {card.pipelineTag && (
+              {pipelineTag && (
                 <span className="break-all text-emerald-400/80 [[data-theme=light]_&]:text-emerald-700">
-                  {card.pipelineTag}
+                  {pipelineTag}
                 </span>
               )}
               {card.latencyMs !== undefined && card.latencyMs > 0 && (
@@ -189,12 +206,12 @@ const TranscriptRow = memo(function TranscriptRow({
               )}
             </div>
 
-            <div className="flex items-center gap-1" lang="ko">
+            <div className="flex items-center gap-1" lang="en">
               <button
                 type="button"
                 onClick={() => isPlaying ? onStopCard() : onPlayCard(card)}
-                aria-label={isPlaying ? '음성 정지' : '번역문 읽기'}
-                title={isPlaying ? '정지' : '번역문 읽기'}
+                aria-label={isPlaying ? 'Stop speech' : 'Read translation aloud'}
+                title={isPlaying ? 'Stop' : 'Read translation aloud'}
                 className={`flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isPlaying
                     ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-rose-700'
@@ -208,8 +225,8 @@ const TranscriptRow = memo(function TranscriptRow({
               <button
                 type="button"
                 onClick={() => void handleCopy()}
-                aria-label="번역문 복사"
-                title="번역문 복사"
+                aria-label="Copy translation"
+                title="Copy translation"
                 className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
               >
                 {copyState === 'copied'
@@ -219,8 +236,8 @@ const TranscriptRow = memo(function TranscriptRow({
               <button
                 type="button"
                 onClick={() => onDeleteCard(card.id)}
-                aria-label="기록 삭제"
-                title="기록 삭제"
+                aria-label="Delete transcript entry"
+                title="Delete transcript entry"
                 className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:text-rose-700"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -228,11 +245,10 @@ const TranscriptRow = memo(function TranscriptRow({
             </div>
 
             <span className="sr-only" role="status" aria-live="polite">
-              {copyState === 'copied' ? '번역문을 복사했습니다.' : ''}
-              {copyState === 'failed' ? '번역문을 복사하지 못했습니다.' : ''}
+              {copyState === 'copied' ? 'Translation copied.' : ''}
+              {copyState === 'failed' ? 'Could not copy the translation.' : ''}
             </span>
-          </div>
-        )}
+        </div>
       </article>
     </li>
   );
@@ -335,7 +351,7 @@ export function TranscriptTerminal({
           <h2 id="transcript-heading" className="truncate text-sm font-semibold text-slate-200 [[data-theme=light]_&]:text-slate-800">
             {t.cardsTitle}
           </h2>
-          <span className="shrink-0 text-xs text-slate-500 [[data-theme=light]_&]:text-slate-600" aria-label={`${cards.length}개`}>
+          <span className="shrink-0 text-xs text-slate-400 [[data-theme=light]_&]:text-slate-600" aria-label={`${cards.length} entries`}>
             [{cards.length}]
           </span>
         </div>
@@ -343,7 +359,7 @@ export function TranscriptTerminal({
         {cards.length > 0 && (
           <button
             type="button"
-            lang="ko"
+            lang="en"
             onClick={() => {
               if (window.confirm(`${t.clearAll}?`)) onClearAll();
             }}
@@ -364,7 +380,7 @@ export function TranscriptTerminal({
         aria-label={t.cardsTitle}
       >
         {cards.length === 0 && !interimText && !isTranslating && !streamingTranslation && (
-          <div className="flex min-h-44 items-center px-2 text-sm text-slate-500 [[data-theme=light]_&]:text-slate-600">
+          <div className="flex min-h-44 items-center px-2 text-sm text-slate-400 [[data-theme=light]_&]:text-slate-600">
             <p>
               <span className="select-none text-emerald-500" aria-hidden="true">$ </span>
               {t.emptyCards}. {t.emptyHint}

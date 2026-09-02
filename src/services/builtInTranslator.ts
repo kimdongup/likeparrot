@@ -74,9 +74,9 @@ export class BuiltInTranslator {
 
   public static getEngineName(): { name: string; isNano: boolean } {
     if (this.isChromeNanoSupported()) {
-      return { name: 'Chrome 내장 Translator', isNano: true };
+      return { name: 'Chrome built-in Translator', isNano: true };
     }
-    return { name: '네트워크 번역 폴백', isNano: false };
+    return { name: 'Network translation fallback', isNano: false };
   }
 
   /**

@@ -1,14 +1,15 @@
 import { memo } from 'react';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
-import { SUPPORTED_LANGUAGES } from '../constants/languages';
+import { Mic, MicOff } from 'lucide-react';
 import type { LanguageOption } from '../types';
 import { getUiStrings } from '../constants/translations';
+import { LanguageFlagSelect } from './LanguageFlagSelect';
+
+const ENGLISH_UI = getUiStrings('en');
 
 interface ControlsProps {
   isListening: boolean;
   isConnecting: boolean;
   onToggleListening: () => void;
-  selectedSourceLang: LanguageOption;
   selectedTargetLang: LanguageOption;
   onTargetLangChange: (lang: LanguageOption) => void;
   disabled?: boolean;
@@ -18,56 +19,45 @@ export const Controls = memo(function Controls({
   isListening,
   isConnecting,
   onToggleListening,
-  selectedSourceLang,
   selectedTargetLang,
   onTargetLangChange,
   disabled,
 }: ControlsProps) {
-  const t = getUiStrings(selectedSourceLang.code);
+  const t = ENGLISH_UI;
   const isActive = isListening || isConnecting;
 
   return (
-    <section lang="ko" aria-label="통역 실행 제어" className="control-panel bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:border-slate-200">
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)] items-end gap-3 sm:gap-4">
+    <section lang="en" aria-label="Live interpretation controls" className="control-panel bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xl [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:border-slate-200">
+      <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-3 sm:gap-4">
         <div className="min-w-0">
           <label
+            id="target-language-label"
             htmlFor="target-language"
-            className="text-xs font-semibold text-pink-300 mb-1.5 flex items-center justify-between gap-2"
+            className="mb-1.5 block truncate text-center text-[10px] font-bold uppercase tracking-wider text-pink-300"
           >
-            <span className="flex items-center gap-1.5">
-              <Volume2 className="w-4 h-4 text-pink-400" aria-hidden="true" />
-              <span>{t.targetLangLabel}</span>
-            </span>
-            <span className="text-[11px] font-mono text-slate-400">
-              {selectedTargetLang.flag}{' '}
-              <span lang={selectedTargetLang.code}>{selectedTargetLang.nativeName}</span>
-            </span>
+            To<span className="sr-only"> — translation and speech language</span>
           </label>
-          <select
+          <LanguageFlagSelect
             id="target-language"
-            value={selectedTargetLang.code}
-            onChange={(event) => {
-              const found = SUPPORTED_LANGUAGES.find((language) => language.code === event.target.value);
-              if (found) onTargetLangChange(found);
-            }}
+            label="Translation and speech language"
+            labelledBy="target-language-label"
+            selectedLanguage={selectedTargetLang}
+            onLanguageChange={onTargetLangChange}
             disabled={isActive}
-            className="w-full min-h-12 bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-pink-500 disabled:opacity-60 transition-all cursor-pointer shadow-inner"
-          >
-            {SUPPORTED_LANGUAGES.map((language) => (
-              <option key={language.code} value={language.code} lang={language.code}>
-                {language.flag} {language.name} ({language.nativeName})
-              </option>
-            ))}
-          </select>
+            className="border-pink-500/40 hover:border-pink-400 focus-within:border-pink-400 focus-within:ring-pink-400"
+          />
         </div>
 
-        <div className="flex flex-col items-stretch justify-end">
+        <div className="flex min-w-0 flex-col items-stretch justify-end">
+          <p className="mb-1.5 line-clamp-2 min-w-0 text-left text-[11px] leading-4 text-slate-400" role="status" aria-live="polite">
+            {isConnecting ? t.connecting : isListening ? t.micListeningHint : t.micIdleHint}
+          </p>
           <button
             type="button"
             onClick={onToggleListening}
             disabled={disabled}
             aria-busy={isConnecting}
-            className={`relative group min-h-12 flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 shadow-lg w-full cursor-pointer touch-manipulation ${
+            className={`relative group flex h-16 w-full min-w-0 items-center justify-center gap-2.5 rounded-xl px-3 py-2 text-sm font-bold leading-tight shadow-lg transition-all duration-300 cursor-pointer touch-manipulation sm:px-6 sm:text-lg ${
               disabled
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 : isActive
@@ -77,19 +67,16 @@ export const Controls = memo(function Controls({
           >
             {isActive ? (
               <>
-                <MicOff className="w-5 h-5" aria-hidden="true" />
-                <span>{t.stopListening}</span>
+                <MicOff className="h-6 w-6 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 text-center">{t.stopListening}</span>
               </>
             ) : (
               <>
-                <Mic className="w-5 h-5" aria-hidden="true" />
-                <span>{t.startListening}</span>
+                <Mic className="h-6 w-6 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 text-center">{t.startListening}</span>
               </>
             )}
           </button>
-          <p className="text-[11px] text-slate-400 mt-1.5 text-center sm:text-left">
-            {isConnecting ? t.connecting : isListening ? t.micListeningHint : t.micIdleHint}
-          </p>
         </div>
       </div>
     </section>

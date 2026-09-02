@@ -115,13 +115,13 @@ const getStoredSelections = (): PipelineSelections => {
 
 const getApiStorageError = (status: PreferenceStorageStatus): string | null => {
   if (status === 'session-and-legacy-failed') {
-    return 'API 키를 탭에 저장하지 못했고 이전 영구 저장 사본도 정리하지 못했습니다. 브라우저 사이트 데이터를 확인해 주세요.';
+    return 'Could not store the API key for this tab or remove the previous device copy. Check your browser site-data settings.';
   }
   if (status === 'session-failed') {
-    return 'API 키를 탭 저장소에 보관하지 못했습니다. 이 탭을 새로고침하면 다시 입력해야 합니다.';
+    return 'Could not store the API key for this tab. You will need to enter it again after refreshing.';
   }
   if (status === 'legacy-cleanup-failed') {
-    return 'API 키는 현재 탭에 적용했지만 “이 기기에 기억하기” 설정을 저장하지 못했습니다. 브라우저 사이트 데이터를 확인해 주세요.';
+    return 'The API key is active in this tab, but the device-storage preference could not be saved. Check your browser site-data settings.';
   }
   return null;
 };
@@ -133,19 +133,19 @@ const derivePipelineStatus = (
   actualEngine?: { name: string; type: PipelineEngineType }
 ): PipelineStatus => {
   const stt = selections.stage1 === 'webspeech_fast'
-    ? 'Web Speech API (600ms 빠른 종결 감지)'
-    : 'Web Speech API (1000ms 안정 종결 감지)';
+    ? 'Web Speech API (600ms fast endpoint detection)'
+    : 'Web Speech API (1000ms stable endpoint detection)';
 
-  let engine = '🤖 자동 최적 라우팅';
+  let engine = '🤖 Automatic routing';
   let engineType: PipelineEngineType = 'network_fallback';
   if (selections.stage2 === 'chrome_nano') {
-    engine = '⚡ Chrome 내장 Translator';
+    engine = '⚡ Chrome built-in Translator';
     engineType = 'chrome_nano';
   } else if (selections.stage2 === 'gemini_stream') {
-    engine = '🌊 Gemini 3.5 Flash-Lite (실시간 스트리밍)';
+    engine = '🌊 Gemini 3.5 Flash-Lite (live streaming)';
     engineType = 'gemini_stream';
   } else if (selections.stage2 === 'turbo_fastpath') {
-    engine = '🌐 네트워크 번역 폴백';
+    engine = '🌐 Network translation fallback';
     engineType = 'network_fallback';
   } else if (BuiltInTranslator.isChromeNanoSupported()) {
     engineType = 'chrome_nano';
@@ -163,8 +163,8 @@ const derivePipelineStatus = (
     engine,
     engineType,
     tts: selections.stage3 === 'tts_pipelined'
-      ? '🔊 완성 구절 즉시 큐 (스트림 지원 엔진)'
-      : '🔊 전체 문장 완료 후 재생 (Standard TTS)',
+      ? '🔊 Queue completed phrases when streaming is available'
+      : '🔊 Speak after the complete sentence (standard TTS)',
     latencyMs,
     isStreaming: engineType === 'gemini_stream',
     isLiveWs: false,
@@ -189,7 +189,7 @@ export function useLikeParrotController(): LikeParrotController {
   const [isFirstRunSettings, setIsFirstRunSettings] = useState(() => !initialApiKeyRead.apiKey);
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
     if (!isAllInOnePage && !WebSpeechRecognizer.isSupported()) {
-      return '글먼저의 Web Speech API를 지원하지 않는 브라우저입니다. 소리먼저를 사용해 보세요.';
+      return 'This browser does not support the Web Speech API used by Text First. Try Audio First instead.';
     }
     return getApiStorageError(initialApiKeyRead.status);
   });
@@ -232,7 +232,7 @@ export function useLikeParrotController(): LikeParrotController {
     ].slice(0, MAX_VISIBLE_CARDS));
     void saveTranslationCard(card).catch((error) => {
       console.warn('[TranslationHistory] save failed:', error);
-      setErrorMessage('번역 스크립트를 기기에 저장하지 못했습니다. 저장 공간 또는 브라우저 권한을 확인해 주세요.');
+      setErrorMessage('Could not save the transcript on this device. Check storage space and browser permissions.');
     });
   }, []);
 
@@ -302,7 +302,7 @@ export function useLikeParrotController(): LikeParrotController {
       .catch((error) => {
         console.warn('[TranslationHistory] load failed:', error);
         if (active) {
-          setErrorMessage('기기에 저장된 번역 기록을 불러오지 못했습니다. 브라우저 저장소 권한을 확인해 주세요.');
+          setErrorMessage('Could not load transcripts stored on this device. Check browser storage permissions.');
         }
       });
     return () => {
@@ -316,7 +316,6 @@ export function useLikeParrotController(): LikeParrotController {
 
   useEffect(() => {
     sourceLangRef.current = sourceLang;
-    document.documentElement.lang = sourceLang.code;
   }, [sourceLang]);
 
   useEffect(() => {
@@ -381,11 +380,11 @@ export function useLikeParrotController(): LikeParrotController {
         addCard({
           id: createCardId(),
           timestamp: new Date(),
-          sourceText: sourceText || '(원문 전사 없음)',
+          sourceText: sourceText || '(Source transcript unavailable)',
           translatedText,
-          sourceLang: currentSource.nativeName,
+          sourceLang: currentSource.name,
           sourceLangCode: currentSource.code,
-          targetLang: currentTarget.nativeName,
+          targetLang: currentTarget.name,
           targetLangCode: currentTarget.speechCode,
           pipelineTag: 'Gemini 3.5 Live Translate',
           latencyMs,
@@ -441,7 +440,7 @@ export function useLikeParrotController(): LikeParrotController {
     recognizer.onFinalTranscript = (finalText) => {
       if (!finalText.trim() || isAllInOnePageRef.current) return;
       if (pendingPipelineJobsRef.current >= MAX_PENDING_PIPELINE_JOBS) {
-        setErrorMessage('말씀이 너무 빠르게 연속 입력되었습니다. 진행 중인 번역이 끝난 뒤 다시 말씀해 주세요.');
+        setErrorMessage('Speech arrived too quickly. Wait for the current translation to finish, then try again.');
         return;
       }
       pendingPipelineJobsRef.current += 1;
@@ -492,7 +491,7 @@ export function useLikeParrotController(): LikeParrotController {
                   setIsSpeaking(SpeechService.isSpeaking());
                   scheduleRecognizerUnmute();
                 },
-                (error) => setErrorMessage(`TTS 재생 오류: ${String(error)}`),
+                (error) => setErrorMessage(`TTS playback error: ${String(error)}`),
                 speechGroupId
               );
             },
@@ -507,9 +506,9 @@ export function useLikeParrotController(): LikeParrotController {
             timestamp: new Date(),
             sourceText: finalText,
             translatedText: result.translatedText,
-            sourceLang: currentSource.nativeName,
+            sourceLang: currentSource.name,
             sourceLangCode: currentSource.code,
-            targetLang: currentTarget.nativeName,
+            targetLang: currentTarget.name,
             targetLangCode: currentTarget.speechCode,
             pipelineTag: result.engineName.replace(/^[^\s]+\s/u, ''),
             latencyMs: endToEndLatencyMs,
@@ -536,7 +535,7 @@ export function useLikeParrotController(): LikeParrotController {
                 setIsSpeaking(SpeechService.isSpeaking());
                 scheduleRecognizerUnmute();
               },
-              (error) => setErrorMessage(`TTS 재생 오류: ${String(error)}`),
+              (error) => setErrorMessage(`TTS playback error: ${String(error)}`),
               speechGroupId
             );
           }
@@ -544,7 +543,7 @@ export function useLikeParrotController(): LikeParrotController {
           SpeechService.cancelGroup(speechGroupId);
           if (!controller.signal.aborted && generation === pipelineGenerationRef.current) {
             const message = error instanceof Error ? error.message : String(error);
-            setErrorMessage(`번역 처리 중 오류가 발생했습니다: ${message}`);
+            setErrorMessage(`Translation failed: ${message}`);
           }
         } finally {
           activePipelineRequestsRef.current.delete(controller);
@@ -588,7 +587,7 @@ export function useLikeParrotController(): LikeParrotController {
     window.history.pushState({}, '', nextPath);
     setCurrentPath(nextPath);
     if (nextPath === '/' && !WebSpeechRecognizer.isSupported()) {
-      setErrorMessage('글먼저의 Web Speech API를 지원하지 않는 브라우저입니다. 소리먼저를 사용해 보세요.');
+      setErrorMessage('This browser does not support the Web Speech API used by Text First. Try Audio First instead.');
     } else {
       setErrorMessage(null);
     }
@@ -600,7 +599,7 @@ export function useLikeParrotController(): LikeParrotController {
       localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
     } catch (error) {
       console.warn('[Storage] pipeline selection save failed:', error);
-      setErrorMessage('파이프라인 설정을 브라우저에 저장하지 못했습니다.');
+      setErrorMessage('Could not save the pipeline settings in this browser.');
     }
     setSelections(nextSelections);
     setPipelineStatus(derivePipelineStatus(nextSelections, apiKey));
@@ -635,11 +634,11 @@ export function useLikeParrotController(): LikeParrotController {
     if (status === 'success') {
       setErrorMessage(null);
     } else if (status === 'legacy-cleanup-failed') {
-      setErrorMessage('현재 탭에서는 API 키 사용을 중지했지만 이 기기의 영구 사본을 삭제하지 못했습니다. 브라우저 사이트 데이터를 지우기 전에는 새로고침 후 키가 다시 나타날 수 있습니다.');
+      setErrorMessage('The API key is no longer active in this tab, but its device copy could not be removed. It may reappear after a refresh until you clear this site’s data.');
     } else if (status === 'session-failed') {
-      setErrorMessage('현재 앱에서는 API 키 사용을 중지했지만 탭 저장 사본을 삭제하지 못했습니다. 이 탭을 새로고침하면 키가 다시 나타날 수 있습니다.');
+      setErrorMessage('The API key is no longer active, but its tab copy could not be removed. It may reappear after refreshing this tab.');
     } else {
-      setErrorMessage('현재 앱에서는 API 키 사용을 중지했지만 브라우저 저장 사본을 삭제하지 못했습니다. 사이트 데이터를 직접 지워 주세요.');
+      setErrorMessage('The API key is no longer active, but its browser copy could not be removed. Clear this site’s data manually.');
     }
     setPipelineStatus(derivePipelineStatus(selections, ''));
     return deleted;
@@ -648,7 +647,7 @@ export function useLikeParrotController(): LikeParrotController {
   const handleThemeChange = useCallback((nextTheme: ThemePreference) => {
     setTheme(nextTheme);
     if (!saveStoredTheme(nextTheme)) {
-      setErrorMessage('테마는 현재 화면에 적용했지만 브라우저에 설정을 저장하지 못했습니다.');
+      setErrorMessage('The theme is active for this page, but the preference could not be saved in your browser.');
     }
   }, []);
 
@@ -656,14 +655,14 @@ export function useLikeParrotController(): LikeParrotController {
     if (cards.length === 0) return;
     try {
       downloadTranscriptHtml(cards, {
-        title: 'LikeParrot 통역 스크립트',
-        locale: sourceLang.code,
+        title: 'LikeParrot Translation Transcript',
+        locale: 'en',
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setErrorMessage(`HTML 스크립트를 저장하지 못했습니다: ${message}`);
+      setErrorMessage(`Could not save the transcript HTML: ${message}`);
     }
-  }, [cards, sourceLang.code]);
+  }, [cards]);
 
   const handleToggleListening = useCallback(async () => {
     setErrorMessage(null);
@@ -672,7 +671,7 @@ export function useLikeParrotController(): LikeParrotController {
       return;
     }
     if (sourceLang.code === targetLang.code) {
-      setErrorMessage('입력 언어와 번역 언어를 서로 다르게 선택해 주세요.');
+      setErrorMessage('Choose different source and target languages.');
       return;
     }
 
@@ -686,14 +685,14 @@ export function useLikeParrotController(): LikeParrotController {
 
     if (isAllInOnePage) {
       if (!apiKey.trim()) {
-        setErrorMessage('소리먼저에는 Gemini API 키가 필요합니다. 설정에서 키를 연결해 주세요.');
+        setErrorMessage('Audio First requires a Gemini API key. Add one in Settings.');
         setIsFirstRunSettings(true);
         setIsSettingsOpen(true);
         return;
       }
       const liveService = liveSocketRef.current;
       if (!liveService) {
-        setErrorMessage('소리먼저 오디오 엔진을 초기화하지 못했습니다. 페이지를 새로고침해 주세요.');
+        setErrorMessage('Could not initialize the Audio First engine. Refresh the page and try again.');
         return;
       }
       const startAttempt = ++liveStartAttemptRef.current;
@@ -720,7 +719,7 @@ export function useLikeParrotController(): LikeParrotController {
 
     const recognizer = recognizerRef.current;
     if (!recognizer) {
-      setErrorMessage('이 브라우저에서 글먼저 음성 인식 엔진을 초기화할 수 없습니다.');
+      setErrorMessage('Could not initialize the Text First speech recognizer in this browser.');
       return;
     }
     if (selections.stage2 === 'auto' || selections.stage2 === 'chrome_nano') {
@@ -780,7 +779,7 @@ export function useLikeParrotController(): LikeParrotController {
       (error) => {
         setPlayingCardId(null);
         setIsSpeaking(false);
-        setErrorMessage(`TTS 재생 오류: ${String(error)}`);
+        setErrorMessage(`TTS playback error: ${String(error)}`);
       }
     );
   }, [
@@ -814,7 +813,7 @@ export function useLikeParrotController(): LikeParrotController {
           (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
         ).slice(0, MAX_VISIBLE_CARDS));
       }
-      setErrorMessage('기록 삭제를 기기에 반영하지 못했습니다. 다시 시도해 주세요.');
+      setErrorMessage('Could not delete this transcript entry from device storage. Try again.');
     });
   }, [cards, handleStopCard, playingCardId]);
 
@@ -830,7 +829,7 @@ export function useLikeParrotController(): LikeParrotController {
       ).sort(
         (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
       ).slice(0, MAX_VISIBLE_CARDS));
-      setErrorMessage('전체 삭제를 기기에 반영하지 못했습니다. 다시 시도해 주세요.');
+      setErrorMessage('Could not clear transcript history from device storage. Try again.');
     });
   }, [cards, handleStopCard]);
 
