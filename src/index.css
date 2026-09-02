@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --app-bg: #020617;
+    --app-surface: #0f172a;
+    --app-surface-raised: #111c31;
+    --app-border: #1e293b;
+    --app-text: #f1f5f9;
+    --app-muted: #94a3b8;
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    --app-bg: #f8fafc;
+    --app-surface: #ffffff;
+    --app-surface-raised: #f1f5f9;
+    --app-border: #dbe3ee;
+    --app-text: #0f172a;
+    --app-muted: #64748b;
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    transition: background-color 160ms ease, color 160ms ease;
+  }
+}
+
+.app-shell {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+/* Only the legacy dark-authored panels need token translation. Scoping these
+   selectors to semantic roots avoids matching unrelated hover utility names. */
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="bg-slate-800"] {
+  background-color: #e9eef5 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="border-slate-8"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="border-slate-9"] {
+  border-color: #dbe3ee !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="border-slate-7"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="border-slate-6"] {
+  border-color: #c7d2e0 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-1"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-2"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-3"] {
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-4"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-5"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-slate-6"] {
+  color: #526078 !important;
+}
+
+:root[data-theme="light"] .sound-first-banner {
+  background-image: linear-gradient(90deg, #ecfdf5, #ffffff, #f0fdfa) !important;
+}
+
+:root[data-theme="light"] .sound-first-banner [class*="bg-emerald-950"] {
+  background-color: #d1fae5 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-indigo-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-indigo-4"] {
+  color: #4338ca !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-emerald-2"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-emerald-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-emerald-4"] {
+  color: #047857 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-rose-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-rose-4"] {
+  color: #be123c !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-pink-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-pink-4"] {
+  color: #be185d !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-violet-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-violet-4"] {
+  color: #6d28d9 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-amber-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel, .transcript-terminal) [class*="text-amber-4"] {
+  color: #92400e !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-cyan-3"] {
+  color: #0e7490 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-sky-3"] {
+  color: #0369a1 !important;
+}
+
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-teal-3"],
+:root[data-theme="light"] :is(.pipeline-board, .sound-first-banner, .control-panel) [class*="text-teal-4"] {
+  color: #0f766e !important;
+}
+
+:root[data-theme="light"] .app-header h1,
+:root[data-theme="light"] .settings-panel h2 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="light"] select,
+:root[data-theme="light"] input {
+  color: #0f172a;
+}
+
+.app-header {
+  padding-top: max(0.625rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+@media (max-width: 640px) {
+  select,
+  input {
+    font-size: 16px;
+  }
+
+  .app-main {
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
+:root[data-theme="light"] ::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
