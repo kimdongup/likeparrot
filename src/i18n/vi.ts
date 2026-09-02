@@ -167,7 +167,7 @@ export const VIETNAMESE_UI = createLocale('vi-VN', {
     audioFirstNeedsKey: 'Âm thanh trước cần khóa API Gemini. Hãy thêm khóa trong phần Cài đặt.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime cần khóa API OpenAI. Hãy thêm khóa trong phần Cài đặt.',
     audioFirstInit: 'Không thể khởi tạo công cụ Âm thanh trước. Hãy tải lại trang rồi thử lại.',
-    textFirstInit: 'Không thể khởi tạo nhận dạng giọng nói cho Văn bản trước trong trình duyệt này.',
+    textFirstInit: 'Không thể bắt đầu nhận dạng giọng nói. Hãy cho phép micrô trong cài đặt trang web của Chrome, kiểm tra ứng dụng khác có đang dùng micrô hay không và kiểm tra mạng rồi thử lại.',
     saveTranscript: 'Không thể lưu bản ghi trên thiết bị này. Hãy kiểm tra dung lượng lưu trữ và quyền của trình duyệt.',
     loadTranscript: 'Không thể tải bản ghi đã lưu trên thiết bị này. Hãy kiểm tra quyền lưu trữ của trình duyệt.',
     speechTooFast: 'Lời nói đến quá nhanh. Hãy chờ bản dịch hiện tại hoàn tất rồi thử lại.',

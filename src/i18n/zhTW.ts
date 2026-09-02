@@ -167,7 +167,7 @@ export const TRADITIONAL_CHINESE_UI = createLocale('zh-TW', {
     audioFirstNeedsKey: '語音優先模式需要Gemini API金鑰。請在設定中新增。',
     audioFirstNeedsOpenAiKey: 'GPT Realtime需要OpenAI API金鑰。請在設定中新增。',
     audioFirstInit: '無法初始化語音優先引擎。請重新整理頁面後再試一次。',
-    textFirstInit: '無法在此瀏覽器中初始化文字優先語音辨識器。',
+    textFirstInit: '無法啟動語音辨識。請在Chrome網站設定中允許麥克風，確認沒有其他應用程式占用麥克風並檢查網路後再試。',
     saveTranscript: '無法在此裝置上儲存對話記錄。請檢查儲存空間與瀏覽器權限。',
     loadTranscript: '無法載入此裝置上儲存的對話記錄。請檢查瀏覽器的儲存權限。',
     speechTooFast: '語音輸入過快。請等待目前的翻譯完成後再試一次。',

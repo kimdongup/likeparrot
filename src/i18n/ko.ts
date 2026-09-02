@@ -167,7 +167,7 @@ export const KOREAN_UI = createLocale('ko-KR', {
     audioFirstNeedsKey: '소리먼저를 사용하려면 Gemini API 키가 필요합니다. 설정에서 키를 추가해 주세요.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime을 사용하려면 OpenAI API 키가 필요합니다. 설정에서 키를 추가해 주세요.',
     audioFirstInit: '소리먼저 엔진을 초기화하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
-    textFirstInit: '이 브라우저에서 글먼저 음성 인식을 초기화하지 못했습니다.',
+    textFirstInit: '음성 인식을 시작하지 못했습니다. Chrome 사이트 설정에서 마이크를 허용하고, 다른 앱이 마이크를 사용 중인지와 네트워크 상태를 확인한 뒤 다시 시도해 주세요.',
     saveTranscript: '이 기기에 기록을 저장하지 못했습니다. 저장 공간과 브라우저 권한을 확인해 주세요.',
     loadTranscript: '이 기기에 저장된 기록을 불러오지 못했습니다. 브라우저 저장소 권한을 확인해 주세요.',
     speechTooFast: '음성이 너무 빠르게 이어졌습니다. 현재 번역이 끝난 뒤 다시 말씀해 주세요.',

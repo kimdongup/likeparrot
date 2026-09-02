@@ -167,7 +167,7 @@ export const SPANISH_UI = createLocale('es-ES', {
     audioFirstNeedsKey: 'Audio primero requiere una clave de API de Gemini. Añádela en Configuración.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime requiere una clave de API de OpenAI. Añádela en Configuración.',
     audioFirstInit: 'No se pudo iniciar el motor de Audio primero. Actualiza la página e inténtalo de nuevo.',
-    textFirstInit: 'No se pudo iniciar el reconocimiento de voz de Texto primero en este navegador.',
+    textFirstInit: 'No se pudo iniciar el reconocimiento de voz. Permite el micrófono en la configuración del sitio de Chrome, comprueba que ninguna otra aplicación lo esté usando y revisa la red antes de reintentar.',
     saveTranscript: 'No se pudo guardar la transcripción en este dispositivo. Revisa el espacio disponible y los permisos del navegador.',
     loadTranscript: 'No se pudieron cargar las transcripciones guardadas en este dispositivo. Revisa los permisos de almacenamiento del navegador.',
     speechTooFast: 'La voz llegó demasiado rápido. Espera a que termine la traducción actual y vuelve a intentarlo.',

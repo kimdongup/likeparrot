@@ -105,8 +105,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: 'Waiting for long or careful speech to finish before playing the complete sentence suits presentations and accuracy-focused study.',
     },
     inputSpeed: {
-      webspeech_fast: 'Speech is finalized after about 600 ms of ending silence.',
-      webspeech_std: 'Speech is finalized after about 1000 ms of ending silence, roughly 400 ms later than fast detection.',
+      webspeech_fast: 'Desktop speech is finalized after about 600 ms of ending silence. Android uses Chrome’s native speech end detection.',
+      webspeech_std: 'Desktop speech is finalized after about 1000 ms of ending silence. Android uses Chrome’s native speech end detection to avoid cutting long speech.',
     },
     inputAccuracy: {
       webspeech_fast: 'Works well for short, clear speech but may mistake a long mid-sentence pause for the end.',
@@ -174,8 +174,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: '길거나 신중한 발화가 끝날 때까지 기다린 뒤 전체 문장을 재생하므로 발표와 정확성 중심 학습에 적합합니다.',
     },
     inputSpeed: {
-      webspeech_fast: '말이 끝난 뒤 약 600ms 동안 침묵하면 발화를 확정합니다.',
-      webspeech_std: '말이 끝난 뒤 약 1000ms 동안 침묵하면 발화를 확정하며 빠른 감지보다 약 400ms 늦습니다.',
+      webspeech_fast: '데스크톱은 약 600ms의 끝 침묵 후 확정합니다. 안드로이드는 Chrome의 음성 종료 감지를 사용합니다.',
+      webspeech_std: '데스크톱은 약 1000ms의 끝 침묵 후 확정합니다. 안드로이드는 긴 발화가 잘리지 않도록 Chrome의 음성 종료 감지를 사용합니다.',
     },
     inputAccuracy: {
       webspeech_fast: '짧고 또렷한 말에 잘 맞지만 문장 중간의 긴 쉼을 발화 종료로 오인할 수 있습니다.',
@@ -243,8 +243,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: '長い発話や慎重な発話が終わるまで待って全文を再生するため、プレゼンテーションや正確さ重視の学習に適しています。',
     },
     inputSpeed: {
-      webspeech_fast: '発話後の無音が約 600 ms 続くと音声を確定します。',
-      webspeech_std: '発話後の無音が約 1000 ms 続くと音声を確定し、高速検出より約 400 ms 遅くなります。',
+      webspeech_fast: 'デスクトップでは約600 msの無音後に確定します。AndroidではChromeの音声終了検出を使います。',
+      webspeech_std: 'デスクトップでは約1000 msの無音後に確定します。Androidでは長い発話を切らないようChromeの音声終了検出を使います。',
     },
     inputAccuracy: {
       webspeech_fast: '短く明瞭な発話に向きますが、文中の長い間を発話終了と誤認する場合があります。',
@@ -312,8 +312,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: '等待較長或謹慎的發言結束後再播放完整句子，適合簡報和重視準確度的學習。',
     },
     inputSpeed: {
-      webspeech_fast: '語音結束後約有 600 毫秒靜音即確認內容。',
-      webspeech_std: '語音結束後約有 1000 毫秒靜音才確認內容，比快速偵測約慢 400 毫秒。',
+      webspeech_fast: '桌面版在結尾靜音約600毫秒後確認；Android使用Chrome原生語音結束偵測。',
+      webspeech_std: '桌面版在結尾靜音約1000毫秒後確認；Android使用Chrome原生偵測，避免截斷長句。',
     },
     inputAccuracy: {
       webspeech_fast: '適合簡短清楚的語音，但可能把句中的較長停頓誤判為結束。',
@@ -381,8 +381,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: '等待较长或谨慎的发言结束后再播放完整句子，适合演示和注重准确度的学习。',
     },
     inputSpeed: {
-      webspeech_fast: '语音结束后静音约 600 毫秒即确认内容。',
-      webspeech_std: '语音结束后静音约 1000 毫秒才确认内容，比快速检测约慢 400 毫秒。',
+      webspeech_fast: '桌面端在结尾静音约600毫秒后确认；Android使用Chrome原生语音结束检测。',
+      webspeech_std: '桌面端在结尾静音约1000毫秒后确认；Android使用Chrome原生检测以避免截断长句。',
     },
     inputAccuracy: {
       webspeech_fast: '适合简短清晰的语音，但可能把句中的较长停顿误判为结束。',
@@ -450,8 +450,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: 'Esperar a que termine una intervención larga o cuidadosa antes de reproducir la frase completa es adecuado para presentaciones y estudio centrado en la precisión.',
     },
     inputSpeed: {
-      webspeech_fast: 'La voz se da por terminada tras unos 600 ms de silencio final.',
-      webspeech_std: 'La voz se da por terminada tras unos 1000 ms de silencio final, unos 400 ms más tarde que con la detección rápida.',
+      webspeech_fast: 'En escritorio se confirma tras unos 600 ms de silencio; Android usa la detección de fin de voz nativa de Chrome.',
+      webspeech_std: 'En escritorio se confirma tras unos 1000 ms; Android usa la detección nativa de Chrome para no cortar frases largas.',
     },
     inputAccuracy: {
       webspeech_fast: 'Funciona bien con voz breve y clara, pero puede confundir una pausa larga dentro de la frase con el final.',
@@ -519,8 +519,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: 'Attendre la fin d’une intervention longue ou réfléchie avant de lire la phrase entière convient aux présentations et à l’étude axée sur la précision.',
     },
     inputSpeed: {
-      webspeech_fast: 'La parole est finalisée après environ 600 ms de silence final.',
-      webspeech_std: 'La parole est finalisée après environ 1 000 ms de silence final, soit environ 400 ms plus tard qu’avec la détection rapide.',
+      webspeech_fast: 'Sur ordinateur, la parole est finalisée après environ 600 ms de silence ; Android utilise la détection native de Chrome.',
+      webspeech_std: 'Sur ordinateur, elle est finalisée après environ 1 000 ms ; Android utilise la détection native de Chrome pour préserver les phrases longues.',
     },
     inputAccuracy: {
       webspeech_fast: 'Convient à une parole courte et claire, mais peut prendre une longue pause au milieu d’une phrase pour la fin.',
@@ -588,8 +588,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: 'Das Warten auf das Ende langer oder bedachter Äußerungen vor der vollständigen Wiedergabe eignet sich für Präsentationen und genauigkeitsorientiertes Lernen.',
     },
     inputSpeed: {
-      webspeech_fast: 'Die Äußerung wird nach etwa 600 ms Stille am Ende abgeschlossen.',
-      webspeech_std: 'Die Äußerung wird nach etwa 1000 ms Stille am Ende abgeschlossen, rund 400 ms später als bei der schnellen Erkennung.',
+      webspeech_fast: 'Am Desktop wird nach etwa 600 ms Stille abgeschlossen; Android nutzt Chromes native Spracherkennung für das Ende.',
+      webspeech_std: 'Am Desktop wird nach etwa 1000 ms abgeschlossen; Android nutzt Chromes native Enderkennung, damit lange Sätze nicht abgeschnitten werden.',
     },
     inputAccuracy: {
       webspeech_fast: 'Funktioniert gut bei kurzer, deutlicher Sprache, kann aber eine lange Pause mitten im Satz für das Ende halten.',
@@ -657,8 +657,8 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
       stableStandard: 'Chờ lời nói dài hoặc thận trọng kết thúc rồi mới phát toàn bộ câu, phù hợp với thuyết trình và học tập chú trọng độ chính xác.',
     },
     inputSpeed: {
-      webspeech_fast: 'Lời nói được chốt sau khoảng 600 ms im lặng ở cuối.',
-      webspeech_std: 'Lời nói được chốt sau khoảng 1000 ms im lặng ở cuối, chậm hơn phát hiện nhanh khoảng 400 ms.',
+      webspeech_fast: 'Trên máy tính, lời nói được chốt sau khoảng 600 ms im lặng; Android dùng phát hiện kết thúc giọng nói gốc của Chrome.',
+      webspeech_std: 'Trên máy tính, lời nói được chốt sau khoảng 1000 ms; Android dùng phát hiện gốc của Chrome để tránh cắt câu dài.',
     },
     inputAccuracy: {
       webspeech_fast: 'Hoạt động tốt với lời nói ngắn, rõ ràng nhưng có thể nhầm khoảng dừng dài giữa câu là điểm kết thúc.',

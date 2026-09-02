@@ -4,7 +4,7 @@ export interface CostEstimatorInput {
   sessionHours: number;
   inputAudioPercent: number;
   translatedOutputPercent: number;
-  krwPerUsd: number;
+  localCurrencyPerUsd: number;
 }
 
 export type CostEstimateId =
@@ -34,8 +34,8 @@ export interface CostEstimate {
   kind: EstimateKind;
   usdLow: number;
   usdHigh: number;
-  krwLow: number;
-  krwHigh: number;
+  localCurrencyLow: number;
+  localCurrencyHigh: number;
   usdPerSessionHourLow: number;
   usdPerSessionHourHigh: number;
   components: readonly CostComponent[];
@@ -52,7 +52,7 @@ const DEFAULT_INPUT: CostEstimatorInput = {
   sessionHours: 1,
   inputAudioPercent: 100,
   translatedOutputPercent: 100,
-  krwPerUsd: 1_350,
+  localCurrencyPerUsd: 1,
 };
 
 const finiteOr = (value: number, fallback: number): number =>
@@ -73,14 +73,18 @@ const normalizeInput = (input: CostEstimatorInput): CostEstimatorInput => ({
     0,
     200
   ),
-  krwPerUsd: clamp(finiteOr(input.krwPerUsd, DEFAULT_INPUT.krwPerUsd), 0, 100_000),
+  localCurrencyPerUsd: clamp(
+    finiteOr(input.localCurrencyPerUsd, DEFAULT_INPUT.localCurrencyPerUsd),
+    0,
+    1_000_000
+  ),
 });
 
 const createEstimate = (
   id: CostEstimateId,
   kind: EstimateKind,
   sessionHours: number,
-  krwPerUsd: number,
+  localCurrencyPerUsd: number,
   components: readonly CostComponent[]
 ): CostEstimate => {
   const usdLow = components.reduce((sum, component) => sum + component.usdLow, 0);
@@ -92,8 +96,8 @@ const createEstimate = (
     kind,
     usdLow,
     usdHigh,
-    krwLow: usdLow * krwPerUsd,
-    krwHigh: usdHigh * krwPerUsd,
+    localCurrencyLow: usdLow * localCurrencyPerUsd,
+    localCurrencyHigh: usdHigh * localCurrencyPerUsd,
     usdPerSessionHourLow: usdLow / safeSessionHours,
     usdPerSessionHourHigh: usdHigh / safeSessionHours,
     components,
@@ -139,14 +143,14 @@ export const estimateVoiceCosts = (input: CostEstimatorInput): CostEstimatorResu
       'text-first-browser',
       'no-direct-api-charge',
       normalized.sessionHours,
-      normalized.krwPerUsd,
+      normalized.localCurrencyPerUsd,
       [{ id: 'browser', usdLow: 0, usdHigh: 0 }]
     ),
     createEstimate(
       'text-first-gemini',
       'estimated',
       normalized.sessionHours,
-      normalized.krwPerUsd,
+      normalized.localCurrencyPerUsd,
       [
         {
           id: 'translation',
@@ -160,7 +164,7 @@ export const estimateVoiceCosts = (input: CostEstimatorInput): CostEstimatorResu
       'google-cloud-pipeline',
       'estimated',
       normalized.sessionHours,
-      normalized.krwPerUsd,
+      normalized.localCurrencyPerUsd,
       [
         { id: 'stt', usdLow: googleSttUsd, usdHigh: googleSttUsd },
         {
@@ -175,7 +179,7 @@ export const estimateVoiceCosts = (input: CostEstimatorInput): CostEstimatorResu
       'openai-realtime-translate',
       'listed',
       normalized.sessionHours,
-      normalized.krwPerUsd,
+      normalized.localCurrencyPerUsd,
       [
         { id: 'translation-audio', usdLow: openAiTranslationUsd, usdHigh: openAiTranslationUsd },
         {
@@ -189,7 +193,7 @@ export const estimateVoiceCosts = (input: CostEstimatorInput): CostEstimatorResu
       'gemini-live-translate',
       'listed',
       normalized.sessionHours,
-      normalized.krwPerUsd,
+      normalized.localCurrencyPerUsd,
       [
         { id: 'input-audio', usdLow: geminiInputUsd, usdHigh: geminiInputUsd },
         { id: 'output-audio', usdLow: geminiOutputUsd, usdHigh: geminiOutputUsd },

@@ -167,7 +167,7 @@ export const JAPANESE_UI = createLocale('ja-JP', {
     audioFirstNeedsKey: '音声優先モードにはGemini APIキーが必要です。設定で追加してください。',
     audioFirstNeedsOpenAiKey: 'GPT RealtimeにはOpenAI APIキーが必要です。設定で追加してください。',
     audioFirstInit: '音声優先エンジンを初期化できませんでした。ページを再読み込みして、もう一度お試しください。',
-    textFirstInit: 'このブラウザではテキスト優先の音声認識を初期化できませんでした。',
+    textFirstInit: '音声認識を開始できませんでした。Chromeのサイト設定でマイクを許可し、他のアプリがマイクを使用していないか、ネットワークが正常かを確認して再試行してください。',
     saveTranscript: 'この端末に会話記録を保存できませんでした。空き容量とブラウザの権限を確認してください。',
     loadTranscript: 'この端末に保存された会話記録を読み込めませんでした。ブラウザのストレージ権限を確認してください。',
     speechTooFast: '次の音声が早すぎます。現在の翻訳が終わってから、もう一度お試しください。',

@@ -167,7 +167,7 @@ export const CHINESE_UI = createLocale('zh-CN', {
     audioFirstNeedsKey: '语音优先模式需要Gemini API密钥。请在设置中添加。',
     audioFirstNeedsOpenAiKey: 'GPT Realtime需要OpenAI API密钥。请在设置中添加。',
     audioFirstInit: '无法初始化语音优先引擎。请刷新页面后重试。',
-    textFirstInit: '无法在此浏览器中初始化文字优先语音识别器。',
+    textFirstInit: '无法启动语音识别。请在Chrome网站设置中允许麦克风，确认没有其他应用占用麦克风并检查网络后重试。',
     saveTranscript: '无法在此设备上保存对话记录。请检查存储空间和浏览器权限。',
     loadTranscript: '无法加载此设备上保存的对话记录。请检查浏览器的存储权限。',
     speechTooFast: '语音输入过快。请等待当前翻译完成后重试。',

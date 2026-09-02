@@ -167,7 +167,7 @@ export const GERMAN_UI = createLocale('de-DE', {
     audioFirstNeedsKey: 'Für „Audio zuerst“ ist ein Gemini-API-Schlüssel erforderlich. Fügen Sie ihn in den Einstellungen hinzu.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime erfordert einen OpenAI-API-Schlüssel. Fügen Sie ihn in den Einstellungen hinzu.',
     audioFirstInit: 'Die Engine für „Audio zuerst“ konnte nicht initialisiert werden. Laden Sie die Seite neu und versuchen Sie es erneut.',
-    textFirstInit: 'Die Spracherkennung für „Text zuerst“ konnte in diesem Browser nicht initialisiert werden.',
+    textFirstInit: 'Die Spracherkennung konnte nicht gestartet werden. Mikrofon in den Chrome-Website-Einstellungen erlauben, andere Apps mit Mikrofonzugriff und die Netzwerkverbindung prüfen und erneut versuchen.',
     saveTranscript: 'Das Transkript konnte nicht auf diesem Gerät gespeichert werden. Überprüfen Sie den Speicherplatz und die Browserberechtigungen.',
     loadTranscript: 'Die auf diesem Gerät gespeicherten Transkripte konnten nicht geladen werden. Überprüfen Sie die Speicherberechtigungen des Browsers.',
     speechTooFast: 'Die Spracheingabe kam zu schnell. Warten Sie, bis die aktuelle Übersetzung abgeschlossen ist, und versuchen Sie es dann erneut.',

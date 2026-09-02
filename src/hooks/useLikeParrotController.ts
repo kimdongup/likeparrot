@@ -708,7 +708,6 @@ export function useLikeParrotController(): LikeParrotController {
   }, [apiKey, stopWorkflow]);
 
   const handleSoundFirstModelChange = useCallback((modelId: SoundFirstModelId) => {
-    if (modelId === soundFirstModelIdRef.current) return;
     const model = getSoundFirstModel(modelId);
     const hasProviderKey = model.provider === 'openai'
       ? Boolean(openAiApiKey.trim())
@@ -720,6 +719,7 @@ export function useLikeParrotController(): LikeParrotController {
         : errors.geminiApiKeyRequired);
       return;
     }
+    if (modelId === soundFirstModelIdRef.current) return;
     stopWorkflow();
     setErrorMessage(null);
     soundFirstModelIdRef.current = modelId;

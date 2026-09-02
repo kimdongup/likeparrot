@@ -168,7 +168,7 @@ export const Header = memo(function Header({
               </span>
             </button>
 
-            {onSaveTranscript && !isBillingPlanPage && (
+            {onSaveTranscript && (
               <HeaderIconButton
                 label={t.header.saveTranscript}
                 title={canSaveTranscript ? t.header.saveTranscriptTitle : t.header.noTranscriptToSave}

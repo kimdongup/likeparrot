@@ -167,7 +167,7 @@ export const FRENCH_UI = createLocale('fr-FR', {
     audioFirstNeedsKey: 'Audio d’abord nécessite une clé API Gemini. Ajoutez-en une dans les Paramètres.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime nécessite une clé API OpenAI. Ajoutez-en une dans les Paramètres.',
     audioFirstInit: 'Impossible d’initialiser le moteur Audio d’abord. Actualisez la page et réessayez.',
-    textFirstInit: 'Impossible d’initialiser la reconnaissance vocale de Texte d’abord dans ce navigateur.',
+    textFirstInit: 'Impossible de démarrer la reconnaissance vocale. Autorisez le micro dans les paramètres du site Chrome, vérifiez qu’aucune autre application ne l’utilise et contrôlez le réseau avant de réessayer.',
     saveTranscript: 'Impossible d’enregistrer la transcription sur cet appareil. Vérifiez l’espace disponible et les autorisations du navigateur.',
     loadTranscript: 'Impossible de charger les transcriptions stockées sur cet appareil. Vérifiez les autorisations de stockage du navigateur.',
     speechTooFast: 'La parole est arrivée trop rapidement. Attendez la fin de la traduction en cours, puis réessayez.',

@@ -1,5 +1,10 @@
 import { useId, useMemo, useState } from 'react';
 import { Calculator, CircleDollarSign, Info } from 'lucide-react';
+import {
+  BILLING_CURRENCY_BY_LOCALE,
+  FX_RATE_LAST_VERIFIED,
+  type BillingCurrencyCode,
+} from '../data/exchangeRates';
 import { BILLING_LOCALE_TAGS, type BillingLocale } from '../data/voicePricing';
 import {
   estimateVoiceCosts,
@@ -35,8 +40,8 @@ const COPY = {
     inputHint: '소리먼저 엔진에 연결된 동안에는 100%로 두세요. 낮은 값은 전체 앱 사용 시간 중 엔진을 켠 비율을 가정할 때만 사용하며, OpenAI translation 세션 안의 침묵을 잘라낸다는 뜻이 아닙니다.',
     output: '번역 음성 길이',
     outputHint: '입력 음성 길이에 대한 출력 음성 길이입니다. 보통 80~120%이며 최대 200%까지 비교할 수 있습니다.',
-    exchange: '원/달러 환율',
-    exchangeHint: '실시간 환율이 아닙니다. 카드 해외결제 수수료와 세금은 포함하지 않습니다.',
+    exchange: '1달러당 원화 환율',
+    exchangeHint: '기본값은 2026-09-01 참고 환율입니다. 값을 바꾸면 원화 예상액이 즉시 다시 계산됩니다. 세금과 해외결제 수수료는 포함하지 않습니다.',
     result: '예상 합계',
     perHour: '세션 1시간당',
     listed: '공식 단가',
@@ -77,8 +82,8 @@ const COPY = {
     inputHint: 'Use 100% while a Sound First engine is connected. Use a lower value only to model the share of total app time when the engine is on; it does not mean trimming silence inside an OpenAI translation session.',
     output: 'Translated audio duration',
     outputHint: 'Output duration relative to input speech. It is often 80–120%; the calculator permits up to 200%.',
-    exchange: 'KRW per USD',
-    exchangeHint: 'This is not a live FX quote. Taxes and foreign-card fees are excluded.',
+    exchange: 'USD per USD',
+    exchangeHint: 'USD is the base billing currency, so its rate is fixed at 1:1. Taxes and card fees are excluded.',
     result: 'Estimated total',
     perHour: 'per session hour',
     listed: 'Listed rate',
@@ -119,8 +124,8 @@ const COPY = {
     inputHint: '「音声優先」エンジンへの接続中は100%にしてください。低い値は、アプリの総利用時間のうちエンジンを有効にする割合を試算する場合だけに使います。OpenAI translationセッション内の無音を切り取るという意味ではありません。',
     output: '翻訳音声の長さ',
     outputHint: '入力音声に対する出力音声の長さです。通常は80～120%で、最大200%まで比較できます。',
-    exchange: '1米ドルあたりの韓国ウォン',
-    exchangeHint: 'リアルタイム為替レートではありません。税金と海外カード決済手数料は含みません。',
+    exchange: '1米ドルあたりの日本円',
+    exchangeHint: '初期値は2026-09-01の参考レートです。値を変更すると日本円の見積額がすぐに再計算されます。税金と海外カード手数料は含みません。',
     result: '推定合計',
     perHour: 'セッション1時間あたり',
     listed: '公式単価',
@@ -161,8 +166,8 @@ const COPY = {
     inputHint: '連線至「聲音優先」引擎期間請設為 100%。較低數值只用於估算整體應用程式使用時間中啟用引擎的比例；並不表示裁切 OpenAI translation 工作階段內的靜音。',
     output: '翻譯音訊長度',
     outputHint: '輸出音訊相對於輸入語音的長度。通常為 80～120%，計算器最多可比較至 200%。',
-    exchange: '每美元韓元匯率',
-    exchangeHint: '這不是即時匯率。不包含稅金與海外刷卡手續費。',
+    exchange: '每美元新臺幣匯率',
+    exchangeHint: '預設值為2026-09-01參考匯率。修改數值後會立即重新計算新臺幣預估金額。不含稅金與海外刷卡手續費。',
     result: '預估總額',
     perHour: '每小時工作階段',
     listed: '官方單價',
@@ -203,8 +208,8 @@ const COPY = {
     inputHint: '连接到“声音优先”引擎期间请设为 100%。较低数值仅用于估算整个应用使用时间中启用引擎的比例；并不表示裁切 OpenAI translation 会话内的静音。',
     output: '翻译音频时长',
     outputHint: '输出音频相对于输入语音的时长。通常为 80～120%，计算器最多可比较至 200%。',
-    exchange: '每美元韩元汇率',
-    exchangeHint: '这不是实时汇率。不包含税费和境外刷卡手续费。',
+    exchange: '每美元人民币汇率',
+    exchangeHint: '默认值为2026-09-01参考汇率。修改数值后会立即重新计算人民币预估金额。不含税费和境外刷卡手续费。',
     result: '预估总额',
     perHour: '每小时会话',
     listed: '官方单价',
@@ -245,8 +250,8 @@ const COPY = {
     inputHint: 'Usa el 100% mientras esté conectado un motor de Sonido primero. Usa un valor inferior solo para representar la proporción del tiempo total de la aplicación durante la que el motor está activo; no significa recortar el silencio dentro de una sesión de OpenAI translation.',
     output: 'Duración del audio traducido',
     outputHint: 'Duración de la salida respecto a la voz de entrada. Suele ser del 80 al 120%; la calculadora permite comparar hasta el 200%.',
-    exchange: 'KRW por USD',
-    exchangeHint: 'No es un tipo de cambio en tiempo real. No incluye impuestos ni comisiones de tarjetas extranjeras.',
+    exchange: 'EUR por USD',
+    exchangeHint: 'El valor inicial es el tipo de referencia del 01-09-2026. Al cambiarlo, el importe estimado en euros se recalcula al instante. No incluye impuestos ni comisiones de tarjeta.',
     result: 'Total estimado',
     perHour: 'por hora de sesión',
     listed: 'Tarifa oficial',
@@ -287,8 +292,8 @@ const COPY = {
     inputHint: 'Utilisez 100 % tant qu’un moteur Son d’abord est connecté. Une valeur inférieure sert uniquement à représenter la part du temps total d’utilisation pendant laquelle le moteur est actif ; elle ne signifie pas que le silence est retiré au sein d’une session OpenAI translation.',
     output: 'Durée de l’audio traduit',
     outputHint: 'Durée de sortie par rapport à la parole d’entrée. Elle se situe souvent entre 80 et 120 % ; le calculateur permet jusqu’à 200 %.',
-    exchange: 'KRW par USD',
-    exchangeHint: 'Il ne s’agit pas d’un taux de change en temps réel. Les taxes et frais de carte à l’étranger sont exclus.',
+    exchange: 'EUR par USD',
+    exchangeHint: 'La valeur initiale est le taux indicatif du 01/09/2026. Toute modification recalcule immédiatement le montant estimé en euros. Taxes et frais de carte exclus.',
     result: 'Total estimé',
     perHour: 'par heure de session',
     listed: 'Tarif officiel',
@@ -329,8 +334,8 @@ const COPY = {
     inputHint: 'Während eine „Ton zuerst“-Engine verbunden ist, verwenden Sie 100 %. Ein niedrigerer Wert dient nur dazu, den Anteil der gesamten App-Nutzungszeit mit aktiver Engine abzubilden; er bedeutet nicht, dass Stille innerhalb einer OpenAI-translation-Sitzung herausgeschnitten wird.',
     output: 'Dauer der Übersetzungsaudioausgabe',
     outputHint: 'Ausgabedauer relativ zur Eingangssprache. Üblich sind 80–120 %; der Rechner erlaubt Vergleiche bis 200 %.',
-    exchange: 'KRW je USD',
-    exchangeHint: 'Dies ist kein Live-Wechselkurs. Steuern und Auslandsgebühren der Karte sind ausgeschlossen.',
+    exchange: 'EUR je USD',
+    exchangeHint: 'Der Ausgangswert ist der Referenzkurs vom 01.09.2026. Änderungen berechnen den Euro-Schätzwert sofort neu. Steuern und Kartengebühren sind nicht enthalten.',
     result: 'Geschätzte Summe',
     perHour: 'pro Sitzungsstunde',
     listed: 'Offizieller Preis',
@@ -371,8 +376,8 @@ const COPY = {
     inputHint: 'Đặt 100% trong khi công cụ Âm thanh trước đang kết nối. Chỉ dùng giá trị thấp hơn để mô phỏng tỷ lệ trong tổng thời gian dùng ứng dụng mà công cụ được bật; điều này không có nghĩa là cắt khoảng lặng bên trong phiên OpenAI translation.',
     output: 'Thời lượng âm thanh đã dịch',
     outputHint: 'Thời lượng đầu ra so với lời nói đầu vào. Thường là 80–120%; máy tính cho phép so sánh tối đa 200%.',
-    exchange: 'KRW trên mỗi USD',
-    exchangeHint: 'Đây không phải tỷ giá trực tiếp. Chưa bao gồm thuế và phí thẻ quốc tế.',
+    exchange: 'VND trên mỗi USD',
+    exchangeHint: 'Giá trị ban đầu là tỷ giá tham khảo ngày 01/09/2026. Khi thay đổi, số tiền ước tính bằng VND được tính lại ngay. Chưa gồm thuế và phí thẻ quốc tế.',
     result: 'Tổng ước tính',
     perHour: 'mỗi giờ phiên',
     listed: 'Đơn giá chính thức',
@@ -415,38 +420,62 @@ const formatUsd = (value: number, locale: BillingLocale): string => {
   }).format(value);
 };
 
-const formatKrw = (value: number, locale: BillingLocale): string =>
-  new Intl.NumberFormat(BILLING_LOCALE_TAGS[locale], {
+const formatLocalCurrency = (
+  value: number,
+  locale: BillingLocale,
+  currency: BillingCurrencyCode
+): string => {
+  const defaultFractionDigits = new Intl.NumberFormat(BILLING_LOCALE_TAGS[locale], {
     style: 'currency',
-    currency: 'KRW',
-    maximumFractionDigits: 0,
+    currency,
+  }).resolvedOptions().maximumFractionDigits ?? 2;
+  const fractionDigits = value > 0 && value < 0.01
+    ? Math.max(defaultFractionDigits, 4)
+    : value > 0 && value < 1
+      ? Math.max(defaultFractionDigits, 2)
+      : defaultFractionDigits;
+  return new Intl.NumberFormat(BILLING_LOCALE_TAGS[locale], {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(value);
+};
 
 const formatUsdRange = (estimate: CostEstimate, locale: BillingLocale, joiner: string): string =>
   isRangeEstimate(estimate)
     ? `${formatUsd(estimate.usdLow, locale)}${joiner}${formatUsd(estimate.usdHigh, locale)}`
     : formatUsd(estimate.usdLow, locale);
 
-const formatKrwRange = (estimate: CostEstimate, locale: BillingLocale, joiner: string): string =>
+const formatLocalCurrencyRange = (
+  estimate: CostEstimate,
+  locale: BillingLocale,
+  currency: BillingCurrencyCode,
+  joiner: string
+): string =>
   isRangeEstimate(estimate)
-    ? `${formatKrw(estimate.krwLow, locale)}${joiner}${formatKrw(estimate.krwHigh, locale)}`
-    : formatKrw(estimate.krwLow, locale);
+    ? `${formatLocalCurrency(estimate.localCurrencyLow, locale, currency)}${joiner}${formatLocalCurrency(estimate.localCurrencyHigh, locale, currency)}`
+    : formatLocalCurrency(estimate.localCurrencyLow, locale, currency);
 
 export function CostCalculator({ locale }: CostCalculatorProps) {
   const t = COPY[locale];
+  const currency = BILLING_CURRENCY_BY_LOCALE[locale];
   const idPrefix = useId();
   const [sessionHours, setSessionHours] = useState<NumericInputValue>(1);
   const [inputAudioPercent, setInputAudioPercent] = useState<NumericInputValue>(100);
   const [translatedOutputPercent, setTranslatedOutputPercent] = useState<NumericInputValue>(100);
-  const [krwPerUsd, setKrwPerUsd] = useState<NumericInputValue>(1_350);
+  const [rateOverrides, setRateOverrides] = useState<
+    Partial<Record<BillingLocale, NumericInputValue>>
+  >({});
+  const localCurrencyPerUsd = rateOverrides[locale] ?? currency.unitsPerUsd;
   const result = useMemo(
     () => estimateVoiceCosts({
       sessionHours: sessionHours === '' ? 0 : sessionHours,
       inputAudioPercent: inputAudioPercent === '' ? 0 : inputAudioPercent,
       translatedOutputPercent: translatedOutputPercent === '' ? 0 : translatedOutputPercent,
-      krwPerUsd: krwPerUsd === '' ? 0 : krwPerUsd,
+      localCurrencyPerUsd: localCurrencyPerUsd === '' ? 0 : localCurrencyPerUsd,
     }),
-    [inputAudioPercent, krwPerUsd, sessionHours, translatedOutputPercent]
+    [inputAudioPercent, localCurrencyPerUsd, sessionHours, translatedOutputPercent]
   );
 
   const componentLabels = {
@@ -564,20 +593,24 @@ export function CostCalculator({ locale }: CostCalculatorProps) {
               <input
                 type="number"
                 min="0"
-                max="100000"
-                step="10"
+                max={currency.maxRate}
+                step={currency.inputStep}
                 inputMode="decimal"
-                value={krwPerUsd}
+                value={localCurrencyPerUsd}
+                disabled={currency.fixedToUsd}
                 aria-describedby={`${idPrefix}-exchange-help`}
-                onChange={(event) => setKrwPerUsd(readNumericInput(
-                  event.currentTarget.value,
-                  event.currentTarget.valueAsNumber,
-                  0,
-                  100_000
-                ))}
-                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 text-base font-bold outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
+                onChange={(event) => {
+                  const nextRate = readNumericInput(
+                    event.currentTarget.value,
+                    event.currentTarget.valueAsNumber,
+                    0,
+                    currency.maxRate
+                  );
+                  setRateOverrides((current) => ({ ...current, [locale]: nextRate }));
+                }}
+                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-raised)] px-3 text-base font-bold outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60"
               />
-              <span className="shrink-0 text-xs text-[var(--app-muted)]">KRW</span>
+              <span className="shrink-0 text-xs text-[var(--app-muted)]">{currency.code}</span>
             </span>
             <span id={`${idPrefix}-exchange-help`} className="sr-only">{t.exchangeHint}</span>
           </label>
@@ -611,7 +644,7 @@ export function CostCalculator({ locale }: CostCalculatorProps) {
                 {formatUsdRange(estimate, locale, t.rangeJoiner)}
               </p>
               <p className="mt-0.5 text-xs text-[var(--app-muted)]">
-                {formatKrwRange(estimate, locale, t.rangeJoiner)} · {t.result}
+                {formatLocalCurrencyRange(estimate, locale, currency.code, t.rangeJoiner)} · {t.result}
               </p>
               <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">{t.notes[estimate.id]}</p>
 
@@ -646,7 +679,7 @@ export function CostCalculator({ locale }: CostCalculatorProps) {
 
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-300 [[data-theme=light]_&]:text-amber-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>{t.estimateNotice} {t.exchangeHint}</p>
+          <p>{t.estimateNotice} {t.exchangeHint} ({FX_RATE_LAST_VERIFIED})</p>
         </div>
       </div>
     </section>

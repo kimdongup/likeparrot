@@ -168,7 +168,7 @@ export const ENGLISH_UI: UiStrings = {
     audioFirstNeedsKey: 'Audio First requires a Gemini API key. Add one in Settings.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime requires an OpenAI API key. Add one in Settings.',
     audioFirstInit: 'Could not initialize the Audio First engine. Refresh the page and try again.',
-    textFirstInit: 'Could not initialize the Text First speech recognizer in this browser.',
+    textFirstInit: 'Could not start speech recognition. Allow the microphone in Chrome site settings, check whether another app is using it and verify the network, then try again.',
     saveTranscript: 'Could not save the transcript on this device. Check storage space and browser permissions.',
     loadTranscript: 'Could not load transcripts stored on this device. Check browser storage permissions.',
     speechTooFast: 'Speech arrived too quickly. Wait for the current translation to finish, then try again.',

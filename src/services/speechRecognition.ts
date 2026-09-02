@@ -10,17 +10,20 @@ export class WebSpeechRecognizer {
   private currentLanguage = 'ko-KR';
   private lastInterimText = '';
   private pendingSilenceText = '';
+  private finalSegments = new Map<number, string>();
   private isMuted = false;
   private generation = 0;
+  private lastEmittedText = '';
+  private lastEmittedAt = 0;
+  private readonly useMobileSingleTurn = typeof navigator !== 'undefined'
+    && /Android/i.test(navigator.userAgent);
 
   public onInterimTranscript?: (text: string) => void;
   public onFinalTranscript?: (text: string) => void;
   public onStateChange?: (isListening: boolean) => void;
   public onError?: (error: string) => void;
 
-  constructor() {
-    this.createRecognitionInstance();
-  }
+  constructor() {}
 
   public static isSupported(): boolean {
     return typeof window !== 'undefined' && Boolean(
@@ -38,6 +41,7 @@ export class WebSpeechRecognizer {
       this.clearSilenceTimer();
       this.pendingSilenceText = '';
       this.lastInterimText = '';
+      this.finalSegments.clear();
       this.onInterimTranscript?.('');
     }
   }
@@ -51,6 +55,7 @@ export class WebSpeechRecognizer {
       previous.onstart = null;
       previous.onresult = null;
       previous.onerror = null;
+      previous.onspeechend = null;
       previous.onend = null;
       try {
         previous.abort();
@@ -59,11 +64,17 @@ export class WebSpeechRecognizer {
 
     const generation = ++this.generation;
     const recognition = new Recognition();
-    recognition.continuous = true;
+    // Chrome for Android does not reliably keep continuous recognition alive.
+    // Single-turn recognition plus a controlled restart is more stable there.
+    recognition.continuous = !this.useMobileSingleTurn;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognition.lang = this.currentLanguage;
     this.recognition = recognition;
+    this.finalSegments.clear();
+    this.lastInterimText = '';
+    this.pendingSilenceText = '';
+    let sessionEnded = false;
 
     recognition.onstart = () => {
       if (!this.isCurrent(recognition, generation)) return;
@@ -80,25 +91,34 @@ export class WebSpeechRecognizer {
     recognition.onresult = (event: any) => {
       // abort() may still leave an already-queued result event behind. Never
       // let it start a new translation after the user pressed Stop.
-      if (!this.isCurrent(recognition, generation) || !this.desiredListening || this.isMuted) return;
+      if (
+        sessionEnded
+        || !this.isCurrent(recognition, generation)
+        || !this.desiredListening
+        || this.isMuted
+      ) return;
       this.clearSilenceTimer();
-      let interim = '';
+      const interimParts: string[] = [];
 
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const transcript = String(event.results[index][0].transcript ?? '').trim();
         if (!transcript) continue;
         if (event.results[index].isFinal) {
-          this.pendingSilenceText = '';
-          this.emitFinal(transcript);
+          this.finalSegments.set(index, transcript);
         } else {
-          interim += `${interim ? ' ' : ''}${transcript}`;
+          interimParts.push(transcript);
         }
       }
 
-      const cleanInterim = interim.trim();
-      if (!cleanInterim) return;
-      this.lastInterimText = cleanInterim;
-      this.onInterimTranscript?.(cleanInterim);
+      const finalText = this.getCombinedFinalText();
+      const combinedText = [finalText, interimParts.join(' ')].filter(Boolean).join(' ').trim();
+      if (!combinedText) return;
+      this.lastInterimText = combinedText;
+      this.onInterimTranscript?.(combinedText);
+
+      // Android's native single-turn endpointer is less prone to cutting a long
+      // utterance during a temporary result-delivery gap than a JavaScript timer.
+      if (this.useMobileSingleTurn) return;
       this.silenceTimer = window.setTimeout(() => {
         if (!this.lastInterimText || this.isMuted || !this.desiredListening) return;
         this.pendingSilenceText = this.lastInterimText;
@@ -110,6 +130,24 @@ export class WebSpeechRecognizer {
           this.emitPendingSilenceText();
         }
       }, this.silenceDelayMs);
+    };
+
+    recognition.onspeechend = () => {
+      if (
+        sessionEnded
+        || !this.isCurrent(recognition, generation)
+        || !this.desiredListening
+        || this.isMuted
+        || !this.lastInterimText
+      ) return;
+      this.clearSilenceTimer();
+      this.pendingSilenceText = this.lastInterimText;
+      try {
+        recognition.stop();
+      } catch {
+        // A native single-turn recognizer may already be ending. onend will
+        // still flush the accumulated transcript.
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -142,7 +180,10 @@ export class WebSpeechRecognizer {
 
     recognition.onend = () => {
       if (!this.isCurrent(recognition, generation)) return;
+      sessionEnded = true;
       this.engineActive = false;
+      this.clearSilenceTimer();
+      if (this.lastInterimText) this.pendingSilenceText = this.lastInterimText;
       this.emitPendingSilenceText();
 
       if (!this.desiredListening) {
@@ -155,8 +196,23 @@ export class WebSpeechRecognizer {
         if (!this.desiredListening || !this.isCurrent(recognition, generation)) return;
         this.createRecognitionInstance();
         this.startCurrentInstance();
-      }, 80);
+      }, this.useMobileSingleTurn ? 250 : 100);
     };
+  }
+
+  private getCombinedFinalText(): string {
+    let previous = '';
+    return [...this.finalSegments.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, text]) => text.trim())
+      .filter((text) => {
+        const normalized = text.replace(/\s+/g, ' ').toLocaleLowerCase();
+        if (!normalized || normalized === previous) return false;
+        previous = normalized;
+        return true;
+      })
+      .join(' ')
+      .trim();
   }
 
   private isCurrent(recognition: SpeechRecognitionType, generation: number): boolean {
@@ -164,12 +220,18 @@ export class WebSpeechRecognizer {
   }
 
   private emitFinal(text: string): void {
-    const clean = text.trim();
+    const clean = text.replace(/\s+/g, ' ').trim();
     if (!clean || !this.desiredListening || this.isMuted) return;
     this.pendingSilenceText = '';
     this.lastInterimText = '';
+    this.finalSegments.clear();
     this.clearSilenceTimer();
     this.onInterimTranscript?.('');
+    const normalized = clean.toLocaleLowerCase();
+    const emittedAt = performance.now();
+    if (normalized === this.lastEmittedText && emittedAt - this.lastEmittedAt < 1_500) return;
+    this.lastEmittedText = normalized;
+    this.lastEmittedAt = emittedAt;
     this.onFinalTranscript?.(clean);
   }
 
@@ -193,24 +255,25 @@ export class WebSpeechRecognizer {
     }
   }
 
-  private startCurrentInstance(): void {
+  private startCurrentInstance(attempt = 0): void {
     try {
       this.recognition?.start();
     } catch (error) {
       console.warn('[WebSpeechRecognizer] start failed:', error);
       this.clearRestartTimer();
+      if (!this.desiredListening) return;
+      if (attempt >= 2) {
+        this.desiredListening = false;
+        this.onStateChange?.(false);
+        this.onError?.(`Could not start speech recognition: ${String(error)}`);
+        return;
+      }
       this.restartTimer = window.setTimeout(() => {
         this.restartTimer = null;
         if (!this.desiredListening) return;
         this.createRecognitionInstance();
-        try {
-          this.recognition?.start();
-        } catch (retryError) {
-          this.desiredListening = false;
-          this.onStateChange?.(false);
-          this.onError?.(`Could not start speech recognition: ${String(retryError)}`);
-        }
-      }, 150);
+        this.startCurrentInstance(attempt + 1);
+      }, this.useMobileSingleTurn ? 300 * (attempt + 1) : 150 * (attempt + 1));
     }
   }
 
@@ -231,10 +294,16 @@ export class WebSpeechRecognizer {
     this.clearSilenceTimer();
     this.pendingSilenceText = '';
     this.lastInterimText = '';
+    this.finalSegments.clear();
     this.isMuted = false;
     this.desiredListening = true;
+    this.lastEmittedText = '';
+    this.lastEmittedAt = 0;
     this.createRecognitionInstance();
-    this.startCurrentInstance();
+    this.restartTimer = window.setTimeout(() => {
+      this.restartTimer = null;
+      if (this.desiredListening) this.startCurrentInstance();
+    }, this.useMobileSingleTurn ? 180 : 0);
   }
 
   public stop(): void {
@@ -244,6 +313,7 @@ export class WebSpeechRecognizer {
     this.clearRestartTimer();
     this.pendingSilenceText = '';
     this.lastInterimText = '';
+    this.finalSegments.clear();
     this.onInterimTranscript?.('');
     const recognition = this.recognition;
     if (recognition) {
