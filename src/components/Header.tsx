@@ -4,7 +4,6 @@ import {
   FileText,
   LoaderCircle,
   Mic,
-  ReceiptText,
   Settings,
   Volume2,
   Zap,
@@ -168,17 +167,6 @@ export const Header = memo(function Header({
                 {isAllInOnePage || isBillingPlanPage ? t.modes.textFirst : t.modes.audioFirst}
               </span>
             </button>
-
-            <HeaderIconButton
-              label={t.header.billingPlanTitle}
-              title={t.header.billingPlanTitle}
-              onClick={() => onNavigate('/billingplan')}
-            >
-              <ReceiptText
-                className={`h-4.5 w-4.5 ${isBillingPlanPage ? 'text-cyan-400' : ''}`}
-                aria-hidden="true"
-              />
-            </HeaderIconButton>
 
             {onSaveTranscript && !isBillingPlanPage && (
               <HeaderIconButton

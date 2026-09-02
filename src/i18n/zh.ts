@@ -87,10 +87,7 @@ export const CHINESE_UI = createLocale('zh-CN', {
     caution: '注意事项',
   },
   settings: {
-    gettingStarted: '开始使用',
     title: '设置',
-    connectTitle: '连接API密钥',
-    firstRunDescription: '语音优先模式需要所选服务商的API密钥。没有密钥仍可使用文字优先模式。',
     close: '关闭设置',
     navigation: '设置类别',
     geminiApi: 'Gemini API',
@@ -132,7 +129,6 @@ export const CHINESE_UI = createLocale('zh-CN', {
     darkDescription: '始终使用深色主题',
     system: '跟随系统',
     systemDescription: '与设备设置保持一致',
-    continueWithoutKey: '不使用API密钥，继续进入文字优先模式',
     saveError: '无法保存API密钥，请重试。',
     storageError: '此标签页可能已启用密钥，但无法保存存储偏好设置。',
     deleteError: '无法删除API密钥，请重试。',
@@ -166,6 +162,8 @@ export const CHINESE_UI = createLocale('zh-CN', {
   },
   errors: {
     chooseDifferentLanguages: '源语言和目标语言不能相同。',
+    geminiApiKeyRequired: '选择此引擎前，请先在设置中保存Gemini API密钥。',
+    openAiApiKeyRequired: '选择此引擎前，请先在设置中保存OpenAI API密钥。',
     audioFirstNeedsKey: '语音优先模式需要Gemini API密钥。请在设置中添加。',
     audioFirstNeedsOpenAiKey: 'GPT Realtime需要OpenAI API密钥。请在设置中添加。',
     audioFirstInit: '无法初始化语音优先引擎。请刷新页面后重试。',

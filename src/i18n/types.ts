@@ -86,10 +86,7 @@ export interface UiStrings {
     caution: string;
   };
   settings: {
-    gettingStarted: string;
     title: string;
-    connectTitle: string;
-    firstRunDescription: string;
     close: string;
     navigation: string;
     geminiApi: string;
@@ -131,7 +128,6 @@ export interface UiStrings {
     darkDescription: string;
     system: string;
     systemDescription: string;
-    continueWithoutKey: string;
     saveError: string;
     storageError: string;
     deleteError: string;
@@ -165,6 +161,8 @@ export interface UiStrings {
   };
   errors: {
     chooseDifferentLanguages: string;
+    geminiApiKeyRequired: string;
+    openAiApiKeyRequired: string;
     audioFirstNeedsKey: string;
     audioFirstNeedsOpenAiKey: string;
     audioFirstInit: string;

@@ -91,6 +91,7 @@ export function App() {
                 lastLatencyMs={view.soundFirstLatencyMs}
                 uiLanguageCode={languages.source.code}
                 selectedModelId={soundFirst.selectedModelId}
+                isSelectedModelConfigured={soundFirst.isSelectedModelConfigured}
                 models={soundFirst.models}
                 onModelChange={soundFirst.changeModel}
               />
@@ -146,8 +147,7 @@ export function App() {
         onThemeChange={settings.changeTheme}
         sourceLanguage={languages.source}
         onSourceLanguageChange={languages.changeSource}
-        isFirstRun={settings.isFirstRun}
-        onContinueWithoutKey={settings.continueWithoutKey}
+        onOpenBillingPlan={() => actions.navigate('/billingplan')}
       />
     </div>
   );

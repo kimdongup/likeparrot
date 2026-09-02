@@ -88,10 +88,7 @@ export const ENGLISH_UI: UiStrings = {
     caution: 'Caution',
   },
   settings: {
-    gettingStarted: 'Getting started',
     title: 'Settings',
-    connectTitle: 'Connect an API key',
-    firstRunDescription: 'Audio First requires a key for the selected provider. You can still use Text First without one.',
     close: 'Close settings',
     navigation: 'Settings sections',
     geminiApi: 'Gemini API',
@@ -133,7 +130,6 @@ export const ENGLISH_UI: UiStrings = {
     darkDescription: 'Always use the dark theme',
     system: 'System',
     systemDescription: 'Match your device setting',
-    continueWithoutKey: 'Continue to Text First without an API key',
     saveError: 'The API key could not be saved. Please try again.',
     storageError: 'The key may be active for this tab, but the storage preference could not be saved.',
     deleteError: 'The API key could not be deleted. Please try again.',
@@ -167,6 +163,8 @@ export const ENGLISH_UI: UiStrings = {
   },
   errors: {
     chooseDifferentLanguages: 'Choose different source and target languages.',
+    geminiApiKeyRequired: 'Save a Gemini API key in Settings before selecting this engine.',
+    openAiApiKeyRequired: 'Save an OpenAI API key in Settings before selecting this engine.',
     audioFirstNeedsKey: 'Audio First requires a Gemini API key. Add one in Settings.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime requires an OpenAI API key. Add one in Settings.',
     audioFirstInit: 'Could not initialize the Audio First engine. Refresh the page and try again.',

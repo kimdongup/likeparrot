@@ -87,10 +87,7 @@ export const VIETNAMESE_UI = createLocale('vi-VN', {
     caution: 'Lưu ý',
   },
   settings: {
-    gettingStarted: 'Bắt đầu',
     title: 'Cài đặt',
-    connectTitle: 'Kết nối khóa API',
-    firstRunDescription: 'Âm thanh trước cần khóa của nhà cung cấp đã chọn. Bạn vẫn có thể dùng Văn bản trước mà không cần khóa.',
     close: 'Đóng phần cài đặt',
     navigation: 'Các mục cài đặt',
     geminiApi: 'API Gemini',
@@ -132,7 +129,6 @@ export const VIETNAMESE_UI = createLocale('vi-VN', {
     darkDescription: 'Luôn dùng giao diện tối',
     system: 'Hệ thống',
     systemDescription: 'Khớp với cài đặt của thiết bị',
-    continueWithoutKey: 'Tiếp tục dùng Văn bản trước mà không có khóa API',
     saveError: 'Không thể lưu khóa API. Vui lòng thử lại.',
     storageError: 'Khóa có thể đang hoạt động trong thẻ này nhưng không thể lưu tùy chọn lưu trữ.',
     deleteError: 'Không thể xóa khóa API. Vui lòng thử lại.',
@@ -166,6 +162,8 @@ export const VIETNAMESE_UI = createLocale('vi-VN', {
   },
   errors: {
     chooseDifferentLanguages: 'Hãy chọn ngôn ngữ nguồn và ngôn ngữ đích khác nhau.',
+    geminiApiKeyRequired: 'Hãy lưu khóa API Gemini trong phần Cài đặt trước khi chọn công cụ này.',
+    openAiApiKeyRequired: 'Hãy lưu khóa API OpenAI trong phần Cài đặt trước khi chọn công cụ này.',
     audioFirstNeedsKey: 'Âm thanh trước cần khóa API Gemini. Hãy thêm khóa trong phần Cài đặt.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime cần khóa API OpenAI. Hãy thêm khóa trong phần Cài đặt.',
     audioFirstInit: 'Không thể khởi tạo công cụ Âm thanh trước. Hãy tải lại trang rồi thử lại.',

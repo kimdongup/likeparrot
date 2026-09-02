@@ -13,6 +13,7 @@ interface AllInOneBannerProps {
   lastLatencyMs?: number;
   uiLanguageCode: string;
   selectedModelId: SoundFirstModelId;
+  isSelectedModelConfigured: boolean;
   models: readonly SoundFirstModelOption[];
   onModelChange: (modelId: SoundFirstModelId) => void;
 }
@@ -24,6 +25,7 @@ export const AllInOneBanner = memo(function AllInOneBanner({
   lastLatencyMs,
   uiLanguageCode,
   selectedModelId,
+  isSelectedModelConfigured,
   models,
   onModelChange,
 }: AllInOneBannerProps) {
@@ -47,12 +49,13 @@ export const AllInOneBanner = memo(function AllInOneBanner({
           <label className="relative min-w-0 max-w-sm flex-1 sm:flex-initial">
             <span className="sr-only">{t.audio.chooseEngine}</span>
             <select
-              value={selectedModelId}
+              value={isSelectedModelConfigured ? selectedModelId : ''}
               onChange={(event) => onModelChange(event.target.value as SoundFirstModelId)}
               disabled={isActive}
               aria-label={t.audio.chooseEngine}
               className="h-9 w-full max-w-sm rounded-lg border border-emerald-500/35 bg-slate-950 px-2 pr-8 text-xs font-semibold text-emerald-200 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30 disabled:cursor-not-allowed disabled:opacity-60 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-emerald-800"
             >
+              <option value="" disabled>{t.audio.chooseEngine}</option>
               {models.map((model) => (
                 <option key={model.id} value={model.id}>{model.label}</option>
               ))}
@@ -76,7 +79,9 @@ export const AllInOneBanner = memo(function AllInOneBanner({
       </div>
 
       <p className="relative text-[11px] text-emerald-200/80 [[data-theme=light]_&]:text-emerald-800">
-        <span className="font-semibold">{t.audio.engine}: {selectedModel.shortLabel}</span>
+        <span className="font-semibold">
+          {t.audio.engine}: {isSelectedModelConfigured ? selectedModel.shortLabel : t.audio.chooseEngine}
+        </span>
         <span className="hidden sm:inline"> · {t.audio.description}</span>
       </p>
 

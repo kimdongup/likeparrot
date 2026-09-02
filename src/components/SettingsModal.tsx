@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, KeyRound, Palette, X } from 'lucide-react';
+import { Bot, KeyRound, Palette, ReceiptText, X } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
 import type { ApiKeyProvider, ThemePreference } from '../services/preferences';
 import type { SoundFirstModelId } from '../services/liveTranslation';
@@ -29,8 +29,7 @@ interface SettingsModalProps {
   onThemeChange: (theme: ThemePreference) => void;
   sourceLanguage: LanguageOption;
   onSourceLanguageChange: (language: LanguageOption) => void;
-  isFirstRun?: boolean;
-  onContinueWithoutKey?: () => void;
+  onOpenBillingPlan: () => void;
 }
 
 type SettingsDialogProps = Omit<SettingsModalProps, 'isOpen'>;
@@ -52,8 +51,7 @@ function SettingsDialog({
   onThemeChange,
   sourceLanguage,
   onSourceLanguageChange,
-  isFirstRun = false,
-  onContinueWithoutKey,
+  onOpenBillingPlan,
 }: SettingsDialogProps) {
   const initialSection: SettingsSection = selectedSoundFirstModelId === 'gpt-realtime-translate'
     ? 'openai'
@@ -132,7 +130,6 @@ function SettingsDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        aria-describedby={isFirstRun ? 'settings-first-run-description' : undefined}
         tabIndex={-1}
         lang={t.locale}
         className="settings-panel flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700/80 bg-slate-900 text-slate-100 shadow-2xl outline-none sm:max-w-4xl sm:rounded-3xl [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-white [[data-theme=light]_&]:text-slate-950"
@@ -141,16 +138,11 @@ function SettingsDialog({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-400">
-                {isFirstRun ? t.settings.gettingStarted : 'LikeParrot'}
+                LikeParrot
               </p>
               <h2 id="settings-title" className="text-lg font-bold tracking-tight sm:text-xl">
-                {isFirstRun ? t.settings.connectTitle : t.settings.title}
+                {t.settings.title}
               </h2>
-              {isFirstRun && (
-                <p id="settings-first-run-description" className="mt-1 max-w-xl text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
-                  {t.settings.firstRunDescription}
-                </p>
-              )}
             </div>
             <button
               type="button"
@@ -201,6 +193,21 @@ function SettingsDialog({
                 );
               })}
             </div>
+            <div className="mt-3 border-t border-slate-800 pt-3 [[data-theme=light]_&]:border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenBillingPlan();
+                }}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:justify-start sm:px-3 [[data-theme=light]_&]:text-cyan-700 [[data-theme=light]_&]:hover:bg-cyan-50 [[data-theme=light]_&]:hover:text-cyan-900"
+                title={t.header.billingPlanTitle}
+                aria-label={t.header.billingPlanTitle}
+              >
+                <ReceiptText className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline">{t.header.billingPlan}</span>
+              </button>
+            </div>
           </nav>
 
           <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6">
@@ -249,17 +256,6 @@ function SettingsDialog({
           </div>
         </div>
 
-        {isFirstRun && onContinueWithoutKey && (
-          <footer className="shrink-0 border-t border-slate-800 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5 [[data-theme=light]_&]:border-slate-200">
-            <button
-              type="button"
-              onClick={onContinueWithoutKey}
-              className="min-h-11 w-full rounded-xl text-sm font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-900"
-            >
-              {t.settings.continueWithoutKey}
-            </button>
-          </footer>
-        )}
       </div>
     </div>
   );

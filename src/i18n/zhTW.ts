@@ -87,10 +87,7 @@ export const TRADITIONAL_CHINESE_UI = createLocale('zh-TW', {
     caution: '注意事項',
   },
   settings: {
-    gettingStarted: '開始使用',
     title: '設定',
-    connectTitle: '連接API金鑰',
-    firstRunDescription: '語音優先模式需要所選服務供應商的API金鑰。沒有金鑰仍可使用文字優先模式。',
     close: '關閉設定',
     navigation: '設定類別',
     geminiApi: 'Gemini API',
@@ -132,7 +129,6 @@ export const TRADITIONAL_CHINESE_UI = createLocale('zh-TW', {
     darkDescription: '一律使用深色主題',
     system: '跟隨系統',
     systemDescription: '與裝置設定保持一致',
-    continueWithoutKey: '不使用API金鑰，繼續進入文字優先模式',
     saveError: '無法儲存API金鑰，請再試一次。',
     storageError: '此分頁可能已啟用金鑰，但無法儲存資料保存偏好設定。',
     deleteError: '無法刪除API金鑰，請再試一次。',
@@ -166,6 +162,8 @@ export const TRADITIONAL_CHINESE_UI = createLocale('zh-TW', {
   },
   errors: {
     chooseDifferentLanguages: '來源語言與目標語言不能相同。',
+    geminiApiKeyRequired: '選擇此引擎前，請先在設定中儲存Gemini API金鑰。',
+    openAiApiKeyRequired: '選擇此引擎前，請先在設定中儲存OpenAI API金鑰。',
     audioFirstNeedsKey: '語音優先模式需要Gemini API金鑰。請在設定中新增。',
     audioFirstNeedsOpenAiKey: 'GPT Realtime需要OpenAI API金鑰。請在設定中新增。',
     audioFirstInit: '無法初始化語音優先引擎。請重新整理頁面後再試一次。',

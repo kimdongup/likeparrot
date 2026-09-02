@@ -87,10 +87,7 @@ export const SPANISH_UI = createLocale('es-ES', {
     caution: 'Precaución',
   },
   settings: {
-    gettingStarted: 'Primeros pasos',
     title: 'Configuración',
-    connectTitle: 'Conecta una clave de API',
-    firstRunDescription: 'Audio primero requiere una clave del proveedor seleccionado. Puedes seguir usando Texto primero sin ella.',
     close: 'Cerrar la configuración',
     navigation: 'Secciones de configuración',
     geminiApi: 'API de Gemini',
@@ -132,7 +129,6 @@ export const SPANISH_UI = createLocale('es-ES', {
     darkDescription: 'Usar siempre el tema oscuro',
     system: 'Sistema',
     systemDescription: 'Usar la configuración del dispositivo',
-    continueWithoutKey: 'Continuar con Texto primero sin una clave de API',
     saveError: 'No se pudo guardar la clave de API. Inténtalo de nuevo.',
     storageError: 'La clave puede estar activa en esta pestaña, pero no se pudo guardar la preferencia de almacenamiento.',
     deleteError: 'No se pudo eliminar la clave de API. Inténtalo de nuevo.',
@@ -166,6 +162,8 @@ export const SPANISH_UI = createLocale('es-ES', {
   },
   errors: {
     chooseDifferentLanguages: 'Elige idiomas de origen y destino diferentes.',
+    geminiApiKeyRequired: 'Guarda una clave de API de Gemini en Configuración antes de seleccionar este motor.',
+    openAiApiKeyRequired: 'Guarda una clave de API de OpenAI en Configuración antes de seleccionar este motor.',
     audioFirstNeedsKey: 'Audio primero requiere una clave de API de Gemini. Añádela en Configuración.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime requiere una clave de API de OpenAI. Añádela en Configuración.',
     audioFirstInit: 'No se pudo iniciar el motor de Audio primero. Actualiza la página e inténtalo de nuevo.',

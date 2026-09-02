@@ -87,10 +87,7 @@ export const JAPANESE_UI = createLocale('ja-JP', {
     caution: '注意点',
   },
   settings: {
-    gettingStarted: 'はじめに',
     title: '設定',
-    connectTitle: 'APIキーを接続',
-    firstRunDescription: '音声優先モードには、選択したプロバイダーのキーが必要です。キーがなくてもテキスト優先モードは利用できます。',
     close: '設定を閉じる',
     navigation: '設定項目',
     geminiApi: 'Gemini API',
@@ -132,7 +129,6 @@ export const JAPANESE_UI = createLocale('ja-JP', {
     darkDescription: '常にダークテーマを使用',
     system: 'システム',
     systemDescription: '端末の設定に合わせる',
-    continueWithoutKey: 'APIキーなしでテキスト優先を続ける',
     saveError: 'APIキーを保存できませんでした。もう一度お試しください。',
     storageError: 'このタブではキーを使用できますが、保存方法の設定を保存できなかった可能性があります。',
     deleteError: 'APIキーを削除できませんでした。もう一度お試しください。',
@@ -166,6 +162,8 @@ export const JAPANESE_UI = createLocale('ja-JP', {
   },
   errors: {
     chooseDifferentLanguages: '元の言語と翻訳先には異なる言語を選択してください。',
+    geminiApiKeyRequired: 'このエンジンを選択する前に、設定でGemini APIキーを保存してください。',
+    openAiApiKeyRequired: 'このエンジンを選択する前に、設定でOpenAI APIキーを保存してください。',
     audioFirstNeedsKey: '音声優先モードにはGemini APIキーが必要です。設定で追加してください。',
     audioFirstNeedsOpenAiKey: 'GPT RealtimeにはOpenAI APIキーが必要です。設定で追加してください。',
     audioFirstInit: '音声優先エンジンを初期化できませんでした。ページを再読み込みして、もう一度お試しください。',

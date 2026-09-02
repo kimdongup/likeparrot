@@ -87,10 +87,7 @@ export const GERMAN_UI = createLocale('de-DE', {
     caution: 'Achtung',
   },
   settings: {
-    gettingStarted: 'Erste Schritte',
     title: 'Einstellungen',
-    connectTitle: 'API-Schlüssel verbinden',
-    firstRunDescription: 'Für „Audio zuerst“ ist ein Schlüssel des ausgewählten Anbieters erforderlich. „Text zuerst“ kann weiterhin ohne Schlüssel verwendet werden.',
     close: 'Einstellungen schließen',
     navigation: 'Einstellungsbereiche',
     geminiApi: 'Gemini API',
@@ -132,7 +129,6 @@ export const GERMAN_UI = createLocale('de-DE', {
     darkDescription: 'Immer das dunkle Design verwenden',
     system: 'System',
     systemDescription: 'Geräteeinstellung übernehmen',
-    continueWithoutKey: 'Ohne API-Schlüssel mit „Text zuerst“ fortfahren',
     saveError: 'Der API-Schlüssel konnte nicht gespeichert werden. Versuchen Sie es erneut.',
     storageError: 'Der Schlüssel ist möglicherweise in diesem Tab aktiv, die Speichereinstellung konnte jedoch nicht gespeichert werden.',
     deleteError: 'Der API-Schlüssel konnte nicht gelöscht werden. Versuchen Sie es erneut.',
@@ -166,6 +162,8 @@ export const GERMAN_UI = createLocale('de-DE', {
   },
   errors: {
     chooseDifferentLanguages: 'Wählen Sie unterschiedliche Ausgangs- und Zielsprachen aus.',
+    geminiApiKeyRequired: 'Speichern Sie zuerst einen Gemini-API-Schlüssel in den Einstellungen, bevor Sie diese Engine auswählen.',
+    openAiApiKeyRequired: 'Speichern Sie zuerst einen OpenAI-API-Schlüssel in den Einstellungen, bevor Sie diese Engine auswählen.',
     audioFirstNeedsKey: 'Für „Audio zuerst“ ist ein Gemini-API-Schlüssel erforderlich. Fügen Sie ihn in den Einstellungen hinzu.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime erfordert einen OpenAI-API-Schlüssel. Fügen Sie ihn in den Einstellungen hinzu.',
     audioFirstInit: 'Die Engine für „Audio zuerst“ konnte nicht initialisiert werden. Laden Sie die Seite neu und versuchen Sie es erneut.',

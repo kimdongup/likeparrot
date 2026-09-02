@@ -87,10 +87,7 @@ export const FRENCH_UI = createLocale('fr-FR', {
     caution: 'Attention',
   },
   settings: {
-    gettingStarted: 'Prise en main',
     title: 'Paramètres',
-    connectTitle: 'Connecter une clé API',
-    firstRunDescription: 'Audio d’abord nécessite une clé du fournisseur sélectionné. Vous pouvez tout de même utiliser Texte d’abord sans clé.',
     close: 'Fermer les paramètres',
     navigation: 'Rubriques des paramètres',
     geminiApi: 'API Gemini',
@@ -132,7 +129,6 @@ export const FRENCH_UI = createLocale('fr-FR', {
     darkDescription: 'Toujours utiliser le thème sombre',
     system: 'Système',
     systemDescription: 'Suivre le réglage de votre appareil',
-    continueWithoutKey: 'Continuer avec Texte d’abord sans clé API',
     saveError: 'Impossible d’enregistrer la clé API. Réessayez.',
     storageError: 'La clé est peut-être active dans cet onglet, mais la préférence de stockage n’a pas pu être enregistrée.',
     deleteError: 'Impossible de supprimer la clé API. Réessayez.',
@@ -166,6 +162,8 @@ export const FRENCH_UI = createLocale('fr-FR', {
   },
   errors: {
     chooseDifferentLanguages: 'Choisissez des langues source et cible différentes.',
+    geminiApiKeyRequired: 'Enregistrez une clé API Gemini dans les paramètres avant de sélectionner ce moteur.',
+    openAiApiKeyRequired: 'Enregistrez une clé API OpenAI dans les paramètres avant de sélectionner ce moteur.',
     audioFirstNeedsKey: 'Audio d’abord nécessite une clé API Gemini. Ajoutez-en une dans les Paramètres.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime nécessite une clé API OpenAI. Ajoutez-en une dans les Paramètres.',
     audioFirstInit: 'Impossible d’initialiser le moteur Audio d’abord. Actualisez la page et réessayez.',

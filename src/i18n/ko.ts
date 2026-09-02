@@ -87,10 +87,7 @@ export const KOREAN_UI = createLocale('ko-KR', {
     caution: '주의 사항',
   },
   settings: {
-    gettingStarted: '시작하기',
     title: '설정',
-    connectTitle: 'API 키 연결',
-    firstRunDescription: '소리먼저에는 선택한 제공자의 API 키가 필요합니다. API 키가 없어도 글먼저는 사용할 수 있습니다.',
     close: '설정 닫기',
     navigation: '설정 항목',
     geminiApi: 'Gemini API',
@@ -132,7 +129,6 @@ export const KOREAN_UI = createLocale('ko-KR', {
     darkDescription: '항상 어두운 테마 사용',
     system: '시스템',
     systemDescription: '기기 설정에 맞춤',
-    continueWithoutKey: 'API 키 없이 글먼저 계속 사용',
     saveError: 'API 키를 저장하지 못했습니다. 다시 시도해 주세요.',
     storageError: '이 탭에서 키를 사용할 수는 있지만 저장 방식을 저장하지 못했습니다.',
     deleteError: 'API 키를 삭제하지 못했습니다. 다시 시도해 주세요.',
@@ -166,6 +162,8 @@ export const KOREAN_UI = createLocale('ko-KR', {
   },
   errors: {
     chooseDifferentLanguages: '모국어와 번역할 언어를 서로 다르게 선택해 주세요.',
+    geminiApiKeyRequired: '이 엔진을 선택하려면 먼저 설정에서 Gemini API 키를 저장해 주세요.',
+    openAiApiKeyRequired: '이 엔진을 선택하려면 먼저 설정에서 OpenAI API 키를 저장해 주세요.',
     audioFirstNeedsKey: '소리먼저를 사용하려면 Gemini API 키가 필요합니다. 설정에서 키를 추가해 주세요.',
     audioFirstNeedsOpenAiKey: 'GPT Realtime을 사용하려면 OpenAI API 키가 필요합니다. 설정에서 키를 추가해 주세요.',
     audioFirstInit: '소리먼저 엔진을 초기화하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.',

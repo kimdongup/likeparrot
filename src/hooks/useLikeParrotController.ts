@@ -73,6 +73,7 @@ export interface LikeParrotController {
   };
   soundFirst: {
     selectedModelId: SoundFirstModelId;
+    isSelectedModelConfigured: boolean;
     models: typeof SOUND_FIRST_MODELS;
     changeModel: (modelId: SoundFirstModelId) => void;
   };
@@ -89,14 +90,12 @@ export interface LikeParrotController {
   };
   settings: {
     isOpen: boolean;
-    isFirstRun: boolean;
     geminiApiKey: string;
     rememberGeminiApiKey: boolean;
     openAiApiKey: string;
     rememberOpenAiApiKey: boolean;
     theme: ThemePreference;
     close: () => void;
-    continueWithoutKey: () => void;
     saveApiKey: (
       provider: ApiKeyProvider,
       apiKey: string,
@@ -224,6 +223,12 @@ export function useLikeParrotController(): LikeParrotController {
   const [initialApiKeyRead] = useState(readStoredApiKey);
   const [initialOpenAiApiKeyRead] = useState(() => readStoredProviderApiKey('openai'));
   const [initialSoundFirstModel] = useState(getStoredSoundFirstModel);
+  const [initialSelections] = useState(() => {
+    const storedSelections = getStoredSelections();
+    return storedSelections.stage2 === 'gemini_stream' && !initialApiKeyRead.apiKey
+      ? { ...storedSelections, stage2: 'auto' as const }
+      : storedSelections;
+  });
   const [apiKey, setApiKey] = useState(initialApiKeyRead.apiKey);
   const [rememberApiKey, setRememberApiKey] = useState(initialApiKeyRead.persistent);
   const [openAiApiKey, setOpenAiApiKey] = useState(initialOpenAiApiKeyRead.apiKey);
@@ -234,19 +239,11 @@ export function useLikeParrotController(): LikeParrotController {
     initialSoundFirstModel
   );
   const [theme, setTheme] = useState<ThemePreference>(readStoredTheme);
-  const [selections, setSelections] = useState<PipelineSelections>(getStoredSelections);
+  const [selections, setSelections] = useState<PipelineSelections>(initialSelections);
   const [initialLanguages] = useState(getInitialLanguages);
   const [sourceLang, setSourceLang] = useState<LanguageOption>(initialLanguages.source);
   const [targetLang, setTargetLang] = useState<LanguageOption>(initialLanguages.target);
-  const initialSoundFirstKey = getSoundFirstModel(initialSoundFirstModel).provider === 'openai'
-    ? initialOpenAiApiKeyRead.apiKey
-    : initialApiKeyRead.apiKey;
-  const [isSettingsOpen, setIsSettingsOpen] = useState(
-    () => !isBillingPlanPage && !initialSoundFirstKey
-  );
-  const [isFirstRunSettings, setIsFirstRunSettings] = useState(
-    () => !isBillingPlanPage && !initialSoundFirstKey
-  );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
     if (!isAllInOnePage && !isBillingPlanPage && !WebSpeechRecognizer.isSupported()) {
       return getUiStrings(initialLanguages.source.code).errors.webSpeechUnsupported;
@@ -264,7 +261,7 @@ export function useLikeParrotController(): LikeParrotController {
   const [cards, setCards] = useState<TranslationCard[]>([]);
   const [playingCardId, setPlayingCardId] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>(() =>
-    derivePipelineStatus(getStoredSelections(), initialApiKeyRead.apiKey)
+    derivePipelineStatus(initialSelections, initialApiKeyRead.apiKey)
   );
 
   const recognizerRef = useRef<WebSpeechRecognizer | null>(null);
@@ -690,7 +687,16 @@ export function useLikeParrotController(): LikeParrotController {
   }, [stopWorkflow]);
 
   const handleSelectionChange = useCallback((nextSelections: PipelineSelections) => {
+    if (
+      nextSelections.stage2 === 'gemini_stream' &&
+      selectionsRef.current.stage2 !== 'gemini_stream' &&
+      !apiKey.trim()
+    ) {
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.geminiApiKeyRequired);
+      return;
+    }
     stopWorkflow();
+    setErrorMessage(null);
     try {
       localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
     } catch (error) {
@@ -703,7 +709,19 @@ export function useLikeParrotController(): LikeParrotController {
 
   const handleSoundFirstModelChange = useCallback((modelId: SoundFirstModelId) => {
     if (modelId === soundFirstModelIdRef.current) return;
+    const model = getSoundFirstModel(modelId);
+    const hasProviderKey = model.provider === 'openai'
+      ? Boolean(openAiApiKey.trim())
+      : Boolean(apiKey.trim());
+    if (!hasProviderKey) {
+      const errors = getUiStrings(sourceLangRef.current.code).errors;
+      setErrorMessage(model.provider === 'openai'
+        ? errors.openAiApiKeyRequired
+        : errors.geminiApiKeyRequired);
+      return;
+    }
     stopWorkflow();
+    setErrorMessage(null);
     soundFirstModelIdRef.current = modelId;
     setSoundFirstModelId(modelId);
     try {
@@ -711,7 +729,7 @@ export function useLikeParrotController(): LikeParrotController {
     } catch {
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.savePipeline);
     }
-  }, [stopWorkflow]);
+  }, [apiKey, openAiApiKey, stopWorkflow]);
 
   const handleSaveApiKey = useCallback((
     provider: ApiKeyProvider,
@@ -734,7 +752,6 @@ export function useLikeParrotController(): LikeParrotController {
           ? rememberOpenAiApiKey
           : rememberOnDevice);
       }
-      setIsFirstRunSettings(false);
     }
     setErrorMessage(getApiStorageError(status, sourceLangRef.current.code));
     if (provider === 'gemini') {
@@ -747,12 +764,28 @@ export function useLikeParrotController(): LikeParrotController {
     stopWorkflow();
     const status = deleteStoredProviderApiKey(provider);
     const deleted = status === 'success';
+    let nextGeminiSelections = selectionsRef.current;
     // Honor the user's delete intent in the running app even if a browser
     // storage backend refuses cleanup. A failed copy can only reappear after a
     // reload, which the warning below makes explicit.
     if (provider === 'gemini') {
       setApiKey('');
       setRememberApiKey(false);
+      if (selectionsRef.current.stage2 === 'gemini_stream') {
+        const nextSelections: PipelineSelections = {
+          ...selectionsRef.current,
+          stage2: 'auto',
+        };
+        nextGeminiSelections = nextSelections;
+        selectionsRef.current = nextSelections;
+        setSelections(nextSelections);
+        try {
+          localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
+        } catch {
+          // The key deletion remains successful even if the safe fallback
+          // selection cannot be persisted.
+        }
+      }
     } else {
       setOpenAiApiKey('');
       setRememberOpenAiApiKey(false);
@@ -766,9 +799,11 @@ export function useLikeParrotController(): LikeParrotController {
     } else {
       setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
     }
-    if (provider === 'gemini') setPipelineStatus(derivePipelineStatus(selections, ''));
+    if (provider === 'gemini') {
+      setPipelineStatus(derivePipelineStatus(nextGeminiSelections, ''));
+    }
     return deleted;
-  }, [selections, stopWorkflow]);
+  }, [stopWorkflow]);
 
   const handleThemeChange = useCallback((nextTheme: ThemePreference) => {
     setTheme(nextTheme);
@@ -820,7 +855,6 @@ export function useLikeParrotController(): LikeParrotController {
         setErrorMessage(selectedModel.provider === 'openai'
           ? strings.errors.audioFirstNeedsOpenAiKey
           : strings.errors.audioFirstNeedsKey);
-        setIsFirstRunSettings(true);
         setIsSettingsOpen(true);
         return;
       }
@@ -987,20 +1021,12 @@ export function useLikeParrotController(): LikeParrotController {
 
   const handleOpenSettings = useCallback(() => {
     stopWorkflow();
-    setIsFirstRunSettings(false);
     setIsSettingsOpen(true);
   }, [stopWorkflow]);
 
   const handleCloseSettings = useCallback(() => {
     setIsSettingsOpen(false);
-    setIsFirstRunSettings(false);
   }, []);
-
-  const handleContinueWithoutKey = useCallback(() => {
-    setIsSettingsOpen(false);
-    setIsFirstRunSettings(false);
-    if (isAllInOnePage) handleNavigate('/');
-  }, [handleNavigate, isAllInOnePage]);
 
   const view = useMemo(() => ({
       isSoundFirstPage: isAllInOnePage,
@@ -1030,11 +1056,18 @@ export function useLikeParrotController(): LikeParrotController {
       isListeningOrConnecting: listeningOrConnecting,
   }), [handleSelectionChange, listeningOrConnecting, pipelineStatus, selections]);
 
-  const soundFirst = useMemo(() => ({
+  const soundFirst = useMemo(() => {
+    const selectedModel = getSoundFirstModel(soundFirstModelId);
+    const isSelectedModelConfigured = selectedModel.provider === 'openai'
+      ? Boolean(openAiApiKey.trim())
+      : Boolean(apiKey.trim());
+    return {
       selectedModelId: soundFirstModelId,
+      isSelectedModelConfigured,
       models: SOUND_FIRST_MODELS,
       changeModel: handleSoundFirstModelChange,
-  }), [handleSoundFirstModelChange, soundFirstModelId]);
+    };
+  }, [apiKey, handleSoundFirstModelChange, openAiApiKey, soundFirstModelId]);
 
   const transcript = useMemo(() => ({
       cards,
@@ -1060,25 +1093,21 @@ export function useLikeParrotController(): LikeParrotController {
 
   const settings = useMemo(() => ({
       isOpen: isSettingsOpen,
-      isFirstRun: isFirstRunSettings,
       geminiApiKey: apiKey,
       rememberGeminiApiKey: rememberApiKey,
       openAiApiKey,
       rememberOpenAiApiKey,
       theme,
       close: handleCloseSettings,
-      continueWithoutKey: handleContinueWithoutKey,
       saveApiKey: handleSaveApiKey,
       deleteApiKey: handleDeleteApiKey,
       changeTheme: handleThemeChange,
   }), [
     apiKey,
     handleCloseSettings,
-    handleContinueWithoutKey,
     handleDeleteApiKey,
     handleSaveApiKey,
     handleThemeChange,
-    isFirstRunSettings,
     isSettingsOpen,
     openAiApiKey,
     rememberApiKey,
