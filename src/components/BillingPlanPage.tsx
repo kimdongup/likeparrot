@@ -38,7 +38,7 @@ const COPY = {
     recommendationIntro: '한 공급자를 모든 단계에 고정하는 것보다, 기기 기능을 먼저 쓰고 부족한 단계만 유료 API로 보내는 방식이 이 앱에 가장 잘 맞습니다.',
     steps: [
       {
-        title: '1. 글먼저를 기본값으로',
+        title: '1. 브라우저 기기 내 워크플로를 기본값으로',
         body: 'Web Speech → Chrome Translator → 기기 기본 TTS 순서로 시도합니다. 지원되는 환경에서는 직접 API 청구가 $0이고, 텍스트가 먼저 생겨 기록 기능도 단순합니다.',
       },
       {
@@ -46,13 +46,13 @@ const COPY = {
         body: '브라우저 번역이 없는 모바일에서는 STT와 기본 TTS는 유지하고 텍스트 번역만 Flash-Lite로 보냅니다. 인식 품질이 부족할 때만 Cloud STT V2 또는 저가 STT를 켭니다.',
       },
       {
-        title: '3. 소리먼저는 짧게 연결',
+        title: '3. 실시간 오디오 워크플로는 짧게 연결',
         body: 'Gemini는 실제 입·출력 audio token에, OpenAI Translate와 입력 전사는 연결 중 문장 사이 침묵을 포함한 audio duration에 과금됩니다. 사용하지 않을 때 연결을 끊고 대화가 끝나면 즉시 세션을 종료하세요.',
       },
     ],
     decisionTitle: '현재 앱에 대한 결론',
     decisions: [
-      '비용 최우선: 글먼저 브라우저 경로를 우선하고 미지원 단계만 서버 fallback으로 전환',
+      '비용 최우선: 브라우저 기기 내 워크플로를 우선하고 미지원 단계만 서버 fallback으로 전환',
       '자연스러운 동시 통역 + 소스 자막 기록: 유료 기준 Gemini Live가 대체로 유리',
       'OpenAI: 번역만 쓰면 $2.04/입력 음성 시간, 현재 LikeParrot처럼 소스 자막 기록을 켜면 $3.06/시간',
       '무료 Gemini tier는 비용이 없지만 입력이 제품 개선에 사용될 수 있으므로 민감한 대화에는 Paid tier 권장',
@@ -155,7 +155,7 @@ const COPY = {
     recommendationIntro: 'This app is cheapest when it uses device capabilities first and meters only the missing stage, instead of committing all three stages to one cloud provider.',
     steps: [
       {
-        title: '1. Default to Text First',
+        title: '1. Default to the browser on-device workflow',
         body: 'Try Web Speech → Chrome Translator → platform TTS. Where supported, the direct API bill is $0 and the text-first record is simpler to maintain.',
       },
       {
@@ -163,13 +163,13 @@ const COPY = {
         body: 'On mobile without browser translation, keep STT and platform TTS and send only text translation to Flash-Lite. Enable Cloud STT V2 or a low-cost STT only when recognition quality is insufficient.',
       },
       {
-        title: '3. Keep Sound First sessions short',
+        title: '3. Keep realtime audio sessions short',
         body: 'Gemini bills actual input/output audio tokens; OpenAI Translate and input transcription bill connected audio duration, including silence between phrases. Disconnect while idle and end the session as soon as the conversation finishes.',
       },
     ],
     decisionTitle: 'Recommendation for this app',
     decisions: [
-      'Lowest cost: prefer the Text First browser path and use a server fallback only for unsupported stages',
+      'Lowest cost: prefer the browser on-device workflow and use a server fallback only for unsupported stages',
       'Natural simultaneous interpretation plus a source transcript: paid Gemini Live is usually the better fit',
       'OpenAI: translation alone is $2.04/input-audio hour; the current LikeParrot source-recording setup is $3.06/hour',
       'Gemini’s Free tier costs $0 but may use input for product improvement; prefer Paid for sensitive conversations',
@@ -272,7 +272,7 @@ const COPY = {
     recommendationIntro: '3段階すべてを1社に固定するより、まず端末機能を使い、不足する段階だけを有料APIに送る方法がこのアプリに最適です。',
     steps: [
       {
-        title: '1. 「テキスト優先」を既定にする',
+        title: '1. ブラウザ内デバイスワークフローを既定にする',
         body: 'Web Speech → Chrome Translator → 端末標準TTSの順に試します。対応環境では直接API料金が$0で、先にテキストができるため記録も簡単です。',
       },
       {
@@ -280,13 +280,13 @@ const COPY = {
         body: 'ブラウザ翻訳がないモバイルではSTTと端末標準TTSを維持し、テキスト翻訳だけをFlash-Liteに送ります。認識品質が不足する場合のみCloud STT V2または低価格STTを有効にします。',
       },
       {
-        title: '3. 「音声優先」の接続を短くする',
+        title: '3. リアルタイム音声ワークフローの接続を短くする',
         body: 'Geminiは実際の入出力audio token、OpenAI Translateと入力文字起こしは文の間の無音を含む接続中のaudio durationに課金します。使わない時は切断し、会話が終わり次第セッションを終了してください。',
       },
     ],
     decisionTitle: '現在のアプリへの結論',
     decisions: [
-      'コスト最優先：ブラウザの「テキスト優先」経路を優先し、未対応の段階だけをサーバーフォールバックに切り替える',
+      'コスト最優先：ブラウザ内デバイスワークフローを優先し、未対応の段階だけをサーバーフォールバックに切り替える',
       '自然な同時通訳 + 原文字幕の記録：有料では通常Gemini Liveが適している',
       'OpenAI：翻訳のみなら入力音声1時間あたり$2.04、現在のLikeParrotの原文記録構成では$3.06/時間',
       'Gemini Free tierは$0ですが入力が製品改善に使われる可能性があるため、機密性の高い会話にはPaid tierを推奨',
@@ -389,7 +389,7 @@ const COPY = {
     recommendationIntro: '與其把三個階段綁定同一個雲端供應商，本應用程式更適合先使用裝置功能，只把缺少的階段送至付費 API。',
     steps: [
       {
-        title: '1. 預設使用「文字優先」',
+        title: '1. 預設使用瀏覽器裝置端工作流程',
         body: '依序嘗試 Web Speech → Chrome Translator → 裝置預設 TTS。在支援的環境中，直接 API 費用為 $0，而且先產生文字也讓記錄更容易維護。',
       },
       {
@@ -397,13 +397,13 @@ const COPY = {
         body: '在沒有瀏覽器翻譯的行動裝置上，保留 STT 與裝置預設 TTS，只把文字翻譯送至 Flash-Lite。只有辨識品質不足時才啟用 Cloud STT V2 或低價 STT。',
       },
       {
-        title: '3. 縮短「聲音優先」連線',
+        title: '3. 縮短即時音訊工作流程連線',
         body: 'Gemini 依實際輸入／輸出 audio token 計費；OpenAI Translate 與輸入轉錄則依連線期間的 audio duration 計費，包含句子間的靜音。不使用時請斷線，對話結束後立即終止工作階段。',
       },
     ],
     decisionTitle: '本應用程式的建議',
     decisions: [
-      '成本優先：先走「文字優先」瀏覽器路徑，只有不支援的階段才切換到伺服器備援',
+      '成本優先：先走瀏覽器裝置端工作流程，只有不支援的階段才切換到伺服器備援',
       '自然同步口譯 + 原文字幕記錄：付費方案通常以 Gemini Live 更合適',
       'OpenAI：只翻譯為每輸入音訊小時 $2.04；LikeParrot 目前的原文記錄設定為 $3.06/小時',
       'Gemini Free tier 為 $0，但輸入可能用於產品改善；敏感對話建議使用 Paid tier',
@@ -514,13 +514,13 @@ const COPY = {
         body: '在没有浏览器翻译的移动设备上，保留 STT 和设备默认 TTS，只把文本翻译发送到 Flash-Lite。只有识别质量不足时才启用 Cloud STT V2 或低价 STT。',
       },
       {
-        title: '3. 缩短“声音优先”连接',
+        title: '3. 缩短实时音频工作流程连接',
         body: 'Gemini 按实际输入/输出 audio token 计费；OpenAI Translate 和输入转录则按连接期间的 audio duration 计费，包括句子之间的静音。不使用时请断开连接，对话结束后立即终止会话。',
       },
     ],
     decisionTitle: '本应用的建议',
     decisions: [
-      '成本优先：先走“文字优先”浏览器路径，只有不支持的阶段才切换到服务器回退',
+      '成本优先：先走浏览器设备端工作流程，只有不支持的阶段才切换到服务器回退',
       '自然同步口译 + 原文字幕记录：付费方案通常以 Gemini Live 更合适',
       'OpenAI：只翻译为每输入音频小时 $2.04；LikeParrot 当前原文记录设置为 $3.06/小时',
       'Gemini Free tier 为 $0，但输入可能用于产品改进；敏感对话建议使用 Paid tier',
@@ -623,7 +623,7 @@ const COPY = {
     recommendationIntro: 'Esta aplicación cuesta menos si usa primero las funciones del dispositivo y envía solo la etapa que falte a una API de pago, en vez de confiar las tres etapas a un único proveedor.',
     steps: [
       {
-        title: '1. Usar Texto primero por defecto',
+        title: '1. Usar por defecto el flujo en el dispositivo del navegador',
         body: 'Prueba Web Speech → Chrome Translator → TTS del dispositivo. Cuando son compatibles, la factura API directa es $0 y el registro basado primero en texto es más sencillo.',
       },
       {
@@ -631,13 +631,13 @@ const COPY = {
         body: 'En móviles sin traducción del navegador, conserva STT y el TTS del dispositivo y envía solo la traducción de texto a Flash-Lite. Activa Cloud STT V2 o un STT económico únicamente si la calidad de reconocimiento no basta.',
       },
       {
-        title: '3. Mantener cortas las conexiones de Sonido primero',
+        title: '3. Mantener cortas las conexiones de audio en tiempo real',
         body: 'Gemini factura los audio token reales de entrada y salida; OpenAI Translate y la transcripción de entrada facturan la audio duration conectada, incluido el silencio entre frases. Desconecta cuando no se use y termina la sesión al acabar la conversación.',
       },
     ],
     decisionTitle: 'Recomendación para esta aplicación',
     decisions: [
-      'Coste mínimo: prioriza la ruta de navegador Texto primero y usa respaldo del servidor solo en etapas no compatibles',
+      'Coste mínimo: prioriza el flujo en el dispositivo del navegador y usa respaldo del servidor solo en etapas no compatibles',
       'Interpretación simultánea natural + registro de subtítulos fuente: Gemini Live de pago suele ser la mejor opción',
       'OpenAI: solo traducción cuesta $2.04/hora de audio de entrada; la configuración actual con registro fuente cuesta $3.06/hora',
       'Gemini Free tier cuesta $0, pero la entrada puede usarse para mejorar productos; usa Paid tier en conversaciones sensibles',
@@ -740,7 +740,7 @@ const COPY = {
     recommendationIntro: 'L’application coûte moins cher en utilisant d’abord les capacités de l’appareil et en facturant uniquement l’étape manquante, plutôt qu’en confiant les trois étapes au même fournisseur cloud.',
     steps: [
       {
-        title: '1. Utiliser Texte d’abord par défaut',
+        title: '1. Utiliser le flux local du navigateur par défaut',
         body: 'Essayez Web Speech → Chrome Translator → TTS de l’appareil. Là où ils sont pris en charge, la facture API directe est de $0 et le journal créé d’abord en texte est plus simple.',
       },
       {
@@ -754,7 +754,7 @@ const COPY = {
     ],
     decisionTitle: 'Recommandation pour cette application',
     decisions: [
-      'Coût minimal : privilégier le parcours navigateur Texte d’abord et n’utiliser un secours serveur que pour les étapes non prises en charge',
+      'Coût minimal : privilégier le flux local du navigateur et n’utiliser un secours serveur que pour les étapes non prises en charge',
       'Interprétation simultanée naturelle + enregistrement des sous-titres source : Gemini Live payant est généralement mieux adapté',
       'OpenAI : traduction seule à $2.04/heure d’audio d’entrée ; configuration LikeParrot actuelle avec enregistrement source à $3.06/heure',
       'Gemini Free tier coûte $0, mais l’entrée peut servir à améliorer les produits ; préférer Paid tier pour les conversations sensibles',
@@ -857,7 +857,7 @@ const COPY = {
     recommendationIntro: 'Die App ist am günstigsten, wenn sie zuerst Gerätefunktionen nutzt und nur die fehlende Stufe über eine kostenpflichtige API abwickelt, statt alle drei Stufen an einen Cloud-Anbieter zu binden.',
     steps: [
       {
-        title: '1. „Text zuerst“ als Standard',
+        title: '1. Browser-internen Geräteablauf als Standard',
         body: 'Versuchen Sie Web Speech → Chrome Translator → Geräte-TTS. Wo dies unterstützt wird, betragen die direkten API-Kosten $0 und die textbasierte Aufzeichnung ist einfacher.',
       },
       {
@@ -871,7 +871,7 @@ const COPY = {
     ],
     decisionTitle: 'Empfehlung für diese App',
     decisions: [
-      'Niedrigste Kosten: Browser-Pfad „Text zuerst“ bevorzugen und Server-Fallback nur für nicht unterstützte Stufen verwenden',
+      'Niedrigste Kosten: browser-internen Geräteablauf bevorzugen und Server-Fallback nur für nicht unterstützte Stufen verwenden',
       'Natürliche Simultanübersetzung + Aufzeichnung der Ausgangsuntertitel: kostenpflichtiges Gemini Live ist meist geeigneter',
       'OpenAI: reine Übersetzung $2.04/Eingangsaudiostunde; aktuelle LikeParrot-Konfiguration mit Ausgangsaufzeichnung $3.06/Stunde',
       'Gemini Free tier kostet $0, Eingaben können aber zur Produktverbesserung genutzt werden; für vertrauliche Gespräche Paid tier verwenden',
@@ -974,7 +974,7 @@ const COPY = {
     recommendationIntro: 'Ứng dụng tiết kiệm nhất khi ưu tiên khả năng của thiết bị và chỉ đưa bước còn thiếu sang API trả phí, thay vì giao cả ba bước cho một nhà cung cấp đám mây.',
     steps: [
       {
-        title: '1. Mặc định dùng Văn bản trước',
+        title: '1. Mặc định dùng quy trình trên thiết bị của trình duyệt',
         body: 'Thử Web Speech → Chrome Translator → TTS của thiết bị. Ở môi trường được hỗ trợ, hóa đơn API trực tiếp là $0 và bản ghi tạo từ văn bản trước cũng dễ duy trì hơn.',
       },
       {
@@ -982,13 +982,13 @@ const COPY = {
         body: 'Trên thiết bị di động không có dịch trong trình duyệt, giữ STT và TTS của thiết bị, chỉ gửi văn bản tới Flash-Lite để dịch. Chỉ bật Cloud STT V2 hoặc STT giá thấp khi chất lượng nhận dạng chưa đủ.',
       },
       {
-        title: '3. Giữ kết nối Âm thanh trước thật ngắn',
+        title: '3. Giữ kết nối âm thanh thời gian thực thật ngắn',
         body: 'Gemini tính phí audio token đầu vào/đầu ra thực tế; OpenAI Translate và chép lời đầu vào tính theo audio duration trong thời gian kết nối, kể cả khoảng lặng giữa các câu. Ngắt kết nối khi không dùng và kết thúc phiên ngay khi cuộc trò chuyện xong.',
       },
     ],
     decisionTitle: 'Khuyến nghị cho ứng dụng này',
     decisions: [
-      'Chi phí thấp nhất: ưu tiên lộ trình Văn bản trước trên trình duyệt, chỉ dùng máy chủ dự phòng cho bước không được hỗ trợ',
+      'Chi phí thấp nhất: ưu tiên quy trình trên thiết bị của trình duyệt, chỉ dùng máy chủ dự phòng cho bước không được hỗ trợ',
       'Phiên dịch đồng thời tự nhiên + ghi phụ đề nguồn: Gemini Live trả phí thường phù hợp hơn',
       'OpenAI: chỉ dịch là $2.04/giờ âm thanh đầu vào; cấu hình ghi nguồn hiện tại của LikeParrot là $3.06/giờ',
       'Gemini Free tier có giá $0 nhưng đầu vào có thể được dùng để cải thiện sản phẩm; nên dùng Paid tier cho cuộc trò chuyện nhạy cảm',

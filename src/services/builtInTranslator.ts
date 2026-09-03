@@ -15,6 +15,11 @@ interface BrowserTranslatorFactory {
   }): Promise<BrowserTranslatorInstance>;
 }
 
+interface CachedBrowserTranslator {
+  instancePromise: Promise<BrowserTranslatorInstance>;
+  readyPromise: Promise<void>;
+}
+
 const getTranslatorFactory = (): BrowserTranslatorFactory | null => {
   const factory = (globalThis as typeof globalThis & {
     Translator?: Partial<BrowserTranslatorFactory>;
@@ -62,7 +67,26 @@ const awaitWithAbort = <T>(operation: Promise<T>, signal?: AbortSignal): Promise
 };
 
 export class BuiltInTranslator {
-  private static translatorCache = new Map<string, Promise<BrowserTranslatorInstance>>();
+  private static translatorCache = new Map<string, CachedBrowserTranslator>();
+
+  private static cacheTranslator(
+    cacheKey: string,
+    instancePromise: Promise<BrowserTranslatorInstance>
+  ): CachedBrowserTranslator {
+    const entry: CachedBrowserTranslator = {
+      instancePromise,
+      readyPromise: instancePromise.then(() => undefined),
+    };
+    this.translatorCache.set(cacheKey, entry);
+    // Keep the returned readiness promise observable by callers while also
+    // preventing an ignored prepare() call from producing an unhandled rejection.
+    void entry.readyPromise.catch(() => {
+      if (this.translatorCache.get(cacheKey) === entry) {
+        this.translatorCache.delete(cacheKey);
+      }
+    });
+    return entry;
+  }
 
   private static isEligibleDesktopBrowser(): boolean {
     if (typeof navigator === 'undefined') return false;
@@ -100,23 +124,25 @@ export class BuiltInTranslator {
    * translation path reuses this promise, so the first utterance is not blocked
    * by duplicate model creation.
    */
-  public static prepare(sourceCode: string, targetCode: string): void {
-    if (!this.isEligibleDesktopBrowser()) return;
+  public static prepare(sourceCode: string, targetCode: string): Promise<void> {
+    if (!this.isEligibleDesktopBrowser()) return Promise.resolve();
     const factory = getTranslatorFactory();
-    if (!factory) return;
+    if (!factory) return Promise.resolve();
     const sourceLanguage = toChromeLanguageCode(sourceCode);
     const targetLanguage = toChromeLanguageCode(targetCode);
-    if (sourceLanguage === targetLanguage) return;
+    if (sourceLanguage === targetLanguage) return Promise.resolve();
     const cacheKey = `${sourceLanguage}|${targetLanguage}`;
-    if (this.translatorCache.has(cacheKey)) return;
+    const cached = this.translatorCache.get(cacheKey);
+    if (cached) return cached.readyPromise;
 
-    const promise = factory.create({ sourceLanguage, targetLanguage });
-    this.translatorCache.set(cacheKey, promise);
-    void promise.catch(() => {
-      if (this.translatorCache.get(cacheKey) === promise) {
-        this.translatorCache.delete(cacheKey);
-      }
-    });
+    // This call must remain synchronous with the user's Start gesture: Chrome
+    // rejects creation of a downloadable language model outside user activation.
+    // Do not attach a caller AbortSignal; stopping one translation must not cancel
+    // the shared platform download needed by the next utterance.
+    return this.cacheTranslator(
+      cacheKey,
+      factory.create({ sourceLanguage, targetLanguage })
+    ).readyPromise;
   }
 
   public static async translateWithChromeNano(
@@ -139,26 +165,29 @@ export class BuiltInTranslator {
     try {
       const availability = await factory.availability({ sourceLanguage, targetLanguage });
       throwIfAborted(signal);
-      if (availability === 'unavailable' || availability === 'no') return null;
-      if (!waitForDownload && availability !== 'available' && availability !== 'readily') {
-        return null;
-      }
+      const isImmediatelyAvailable = availability === 'available' || availability === 'readily';
+      let cached = this.translatorCache.get(cacheKey);
 
-      let translatorPromise = this.translatorCache.get(cacheKey);
-      if (!translatorPromise) {
-        translatorPromise = factory.create({ sourceLanguage, targetLanguage, signal });
-        this.translatorCache.set(cacheKey, translatorPromise);
-        const createdPromise = translatorPromise;
-        void createdPromise.catch(() => {
-          if (this.translatorCache.get(cacheKey) === createdPromise) {
-            this.translatorCache.delete(cacheKey);
-          }
-        });
+      if (!cached) {
+        if (availability === 'unavailable' || availability === 'no') return null;
+        // A downloadable/downloading model may only be created from prepare(),
+        // while user activation is still live. Never attempt that creation from
+        // the later speech-result callback.
+        if (!isImmediatelyAvailable) return null;
+        cached = this.cacheTranslator(
+          cacheKey,
+          factory.create({ sourceLanguage, targetLanguage })
+        );
+      } else if (!waitForDownload && !isImmediatelyAvailable) {
+        // Automatic routing can move on to a configured network engine instead
+        // of waiting. When no such engine exists, its caller opts into waiting
+        // for this already user-gesture-started preparation promise.
+        return null;
       }
 
       // A prepare() promise may be shared and cannot be retroactively aborted.
       // Race the caller against it so Stop immediately releases the pipeline.
-      const translator = await awaitWithAbort(translatorPromise, signal);
+      const translator = await awaitWithAbort(cached.instancePromise, signal);
       throwIfAborted(signal);
       const translated = await translator.translate(text, { signal });
       throwIfAborted(signal);

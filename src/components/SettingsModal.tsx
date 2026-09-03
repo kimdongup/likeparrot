@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Cloud, KeyRound, Palette, ReceiptText, X } from 'lucide-react';
+import { Bot, Cloud, KeyRound, Palette, ReceiptText, Route, X } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
-import type { ApiKeyProvider, ThemePreference } from '../services/preferences';
-import type { SoundFirstModelId } from '../services/liveTranslation';
+import type {
+  ApiKeyProvider,
+  AutomaticRoutingPreference,
+  ThemePreference,
+} from '../services/preferences';
 import type { LanguageOption } from '../types';
 import { ApiKeySettingsPanel } from './ApiKeySettingsPanel';
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel';
+import { AutomaticRoutingSettingsPanel } from './AutomaticRoutingSettingsPanel';
 import { SourceLanguageFlags } from './SourceLanguageFlags';
 
 type ActionResult = boolean | void | Promise<boolean | void>;
-type SettingsSection = 'gemini' | 'openai' | 'azure' | 'appearance';
+type SettingsSection = 'routing' | 'gemini' | 'openai' | 'azure' | 'appearance';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -21,7 +25,6 @@ interface SettingsModalProps {
   azureApiKey: string;
   azureRegion: string;
   rememberAzureApiKey: boolean;
-  selectedSoundFirstModelId: SoundFirstModelId;
   onSaveApiKey: (
     provider: ApiKeyProvider,
     apiKey: string,
@@ -29,6 +32,10 @@ interface SettingsModalProps {
     auxiliaryValue?: string
   ) => ActionResult;
   onDeleteApiKey: (provider: ApiKeyProvider) => ActionResult;
+  automaticRoutingPreference: AutomaticRoutingPreference;
+  onAutomaticRoutingPreferenceChange: (
+    preference: AutomaticRoutingPreference
+  ) => ActionResult;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   sourceLanguage: LanguageOption;
@@ -51,19 +58,17 @@ function SettingsDialog({
   azureApiKey,
   azureRegion,
   rememberAzureApiKey,
-  selectedSoundFirstModelId,
   onSaveApiKey,
   onDeleteApiKey,
+  automaticRoutingPreference,
+  onAutomaticRoutingPreferenceChange,
   theme,
   onThemeChange,
   sourceLanguage,
   onSourceLanguageChange,
   onOpenBillingPlan,
 }: SettingsDialogProps) {
-  const initialSection: SettingsSection = selectedSoundFirstModelId === 'gpt-realtime-translate'
-    ? 'openai'
-    : 'gemini';
-  const [section, setSection] = useState<SettingsSection>(initialSection);
+  const [section, setSection] = useState<SettingsSection>('routing');
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -120,6 +125,7 @@ function SettingsDialog({
   }, []);
 
   const sections = [
+    { id: 'routing' as const, label: t.settings.automaticRouting, Icon: Route, saved: false },
     { id: 'gemini' as const, label: t.settings.geminiApi, Icon: KeyRound, saved: Boolean(geminiApiKey) },
     { id: 'openai' as const, label: t.settings.openAiApi, Icon: Bot, saved: Boolean(openAiApiKey) },
     { id: 'azure' as const, label: t.settings.azureApi, Icon: Cloud, saved: Boolean(azureApiKey) },
@@ -219,6 +225,16 @@ function SettingsDialog({
           </nav>
 
           <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6">
+            <div id="settings-panel-routing" role="tabpanel" aria-labelledby="settings-tab-routing" hidden={section !== 'routing'}>
+              <AutomaticRoutingSettingsPanel
+                preference={automaticRoutingPreference}
+                geminiConfigured={Boolean(geminiApiKey)}
+                azureConfigured={Boolean(azureApiKey)}
+                t={t}
+                onChange={onAutomaticRoutingPreferenceChange}
+              />
+            </div>
+
             <div id="settings-panel-gemini" role="tabpanel" aria-labelledby="settings-tab-gemini" hidden={section !== 'gemini'}>
               <ApiKeySettingsPanel
                 provider="gemini"

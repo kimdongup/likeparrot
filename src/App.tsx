@@ -1,13 +1,18 @@
 import { lazy, Suspense } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { AllInOneBanner } from './components/AllInOneBanner';
 import { Controls } from './components/Controls';
 import { Header } from './components/Header';
-import { PipelineBoard } from './components/PipelineBoard';
+import { MobileDictationComposer } from './components/MobileDictationComposer';
 import { SettingsModal } from './components/SettingsModal';
+import { TargetLanguageBar } from './components/TargetLanguageBar';
 import { TranscriptTerminal } from './components/TranscriptTerminal';
+import { WorkflowPicker } from './components/WorkflowPicker';
 import { getUiStrings } from './constants/translations';
 import { useLikeParrotController } from './hooks/useLikeParrotController';
+import {
+  getMobileDictationComposerCopy,
+  getWorkflowPickerCopy,
+} from './services/workflowPresentation';
 
 const BillingPlanPage = lazy(() => import('./components/BillingPlanPage').then((module) => ({
   default: module.BillingPlanPage,
@@ -18,16 +23,26 @@ export function App() {
     view,
     activity,
     languages,
-    pipeline,
-    soundFirst,
+    workflow,
     transcript,
     settings,
     actions,
   } = useLikeParrotController();
   const t = getUiStrings(languages.source.code);
-  const selectedLiveApiKey = soundFirst.selectedModelId === 'gpt-realtime-translate'
-    ? settings.openAiApiKey
-    : settings.geminiApiKey;
+  const workflowCopy = getWorkflowPickerCopy(
+    languages.source.code,
+    workflow.profiles,
+    workflow.availability
+  );
+  const mobileComposerCopy = getMobileDictationComposerCopy(languages.source.code);
+  const displayedProfile = workflow.activeProfile ?? workflow.profiles.find(
+    (profile) => profile.id === workflow.selectedId
+  );
+  const workflowLabel = displayedProfile
+    ? workflowCopy.profileLabels?.[displayedProfile.id] ?? displayedProfile.shortLabel
+    : undefined;
+  const workflowBusy = activity.isListening || activity.isConnecting ||
+    activity.isSpeaking || transcript.isTranslating;
 
   return (
     <div className="app-shell min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
@@ -35,15 +50,15 @@ export function App() {
         isListening={activity.isListening}
         isConnecting={activity.isConnecting}
         isSpeaking={activity.isSpeaking}
-        hasApiKey={Boolean(selectedLiveApiKey)}
+        hasConfigurationIssue={!workflow.isSelectedAvailable}
         onOpenSettings={actions.openSettings}
         onSaveTranscript={actions.saveTranscript}
         canSaveTranscript={transcript.cards.length > 0}
-        isAllInOnePage={view.isSoundFirstPage}
         isBillingPlanPage={view.isBillingPlanPage}
         onNavigate={actions.navigate}
         selectedSourceLang={languages.source}
         onSourceLangChange={languages.changeSource}
+        workflowLabel={workflowLabel}
       />
 
       <main className="app-main flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-4 sm:gap-5">
@@ -83,38 +98,43 @@ export function App() {
           </Suspense>
         ) : (
           <>
-            {view.isSoundFirstPage ? (
-              <AllInOneBanner
+            <WorkflowPicker
+              profiles={workflow.profiles}
+              value={workflow.selectedId}
+              availability={workflow.availability}
+              resolvedProfileId={workflow.resolvedProfileId}
+              onChange={workflow.change}
+              disabled={workflowBusy}
+              copy={workflowCopy}
+            />
+
+            {workflow.isMobileDictation ? (
+              <>
+                <TargetLanguageBar
+                  selectedSourceLang={languages.source}
+                  selectedTargetLang={languages.target}
+                  onTargetLangChange={languages.changeTarget}
+                  disabled={transcript.isTranslating}
+                />
+                <MobileDictationComposer
+                  sourceLanguageCode={languages.source.speechCode}
+                  sourceLanguageName={languages.source.nativeName}
+                  onSubmit={workflow.submitText}
+                  disabled={!workflow.isSelectedAvailable || transcript.isTranslating}
+                  copy={mobileComposerCopy}
+                />
+              </>
+            ) : (
+              <Controls
                 isListening={activity.isListening}
                 isConnecting={activity.isConnecting}
-                isSpeaking={activity.isSpeaking}
-                lastLatencyMs={view.soundFirstLatencyMs}
-                uiLanguageCode={languages.source.code}
-                selectedModelId={soundFirst.selectedModelId}
-                isSelectedModelConfigured={soundFirst.isSelectedModelConfigured}
-                models={soundFirst.models}
-                onModelChange={soundFirst.changeModel}
-              />
-            ) : (
-              <PipelineBoard
-                pipeline={pipeline.status}
-                selections={pipeline.selections}
-                onSelectionChange={pipeline.changeSelections}
-                isListening={pipeline.isListeningOrConnecting}
-                isSpeaking={activity.isSpeaking}
-                uiLanguageCode={languages.source.code}
+                onToggleListening={actions.toggleListening}
+                selectedSourceLang={languages.source}
+                selectedTargetLang={languages.target}
+                onTargetLangChange={languages.changeTarget}
+                disabled={!workflow.isSelectedAvailable || !workflow.activeProfile}
               />
             )}
-
-            <Controls
-              isListening={activity.isListening}
-              isConnecting={activity.isConnecting}
-              onToggleListening={actions.toggleListening}
-              selectedSourceLang={languages.source}
-              selectedTargetLang={languages.target}
-              onTargetLangChange={languages.changeTarget}
-              disabled={false}
-            />
 
             <TranscriptTerminal
               cards={transcript.cards}
@@ -143,9 +163,10 @@ export function App() {
         azureApiKey={settings.azureApiKey}
         azureRegion={settings.azureRegion}
         rememberAzureApiKey={settings.rememberAzureApiKey}
-        selectedSoundFirstModelId={soundFirst.selectedModelId}
         onSaveApiKey={settings.saveApiKey}
         onDeleteApiKey={settings.deleteApiKey}
+        automaticRoutingPreference={settings.automaticRoutingPreference}
+        onAutomaticRoutingPreferenceChange={settings.changeAutomaticRoutingPreference}
         theme={settings.theme}
         onThemeChange={settings.changeTheme}
         sourceLanguage={languages.source}

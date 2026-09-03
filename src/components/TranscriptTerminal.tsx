@@ -91,8 +91,17 @@ const TranscriptRow = memo(function TranscriptRow({
   );
   const detailId = `transcript-detail-${card.id.replace(/[^a-zA-Z0-9_-]/gu, '-')}`;
   const sourceTranscriptUnavailable = card.sourceTextUnavailable ||
+    !card.sourceText.trim() ||
     card.sourceText === '(Source transcript unavailable)' ||
     card.sourceText === '(원문 전사 없음)';
+  const translationStatus = card.translationStatus ?? 'complete';
+  const hasCompletedTranslation = translationStatus === 'complete' &&
+    card.translatedText.trim().length > 0;
+  const translationStateText = translationStatus === 'pending'
+    ? t.transcript.translationPending
+    : translationStatus === 'failed' && card.translationFailureReason === 'interrupted'
+      ? t.transcript.translationInterrupted
+      : t.transcript.translationFailed;
   const sourceLanguageName = getLocalizedLanguageNameByCode(card.sourceLangCode, t.locale);
   const targetLanguageName = getLocalizedLanguageNameByCode(card.targetLangCode, t.locale);
   const normalizedPipelineTag = normalizePipelineTag(card.pipelineTag);
@@ -130,6 +139,7 @@ const TranscriptRow = memo(function TranscriptRow({
   };
 
   const handleCopy = async () => {
+    if (!hasCompletedTranslation) return;
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
     try {
       await copyText(card.translatedText);
@@ -181,12 +191,28 @@ const TranscriptRow = memo(function TranscriptRow({
               {sourceTranscriptUnavailable ? t.transcript.sourceUnavailable : card.sourceText}
             </span>
           </span>
-          <span className="mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 text-slate-100 sm:text-base [[data-theme=light]_&]:text-slate-900">
+          <span className={`mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 sm:text-base ${
+            hasCompletedTranslation
+              ? 'text-slate-100 [[data-theme=light]_&]:text-slate-900'
+              : translationStatus === 'pending'
+                ? 'text-amber-300 [[data-theme=light]_&]:text-amber-700'
+                : 'text-rose-300 [[data-theme=light]_&]:text-rose-700'
+          }`}>
             <span className="w-10 shrink-0 select-none text-right text-indigo-400" aria-hidden="true">&gt;</span>
-            <span className="min-w-0 whitespace-pre-wrap break-words" lang={card.targetLangCode}>
-              {card.translatedText}
+            <span
+              className="min-w-0 whitespace-pre-wrap break-words"
+              lang={hasCompletedTranslation ? card.targetLangCode : t.locale}
+              role={hasCompletedTranslation ? undefined : 'status'}
+            >
+              {hasCompletedTranslation ? card.translatedText : translationStateText}
+              {translationStatus === 'pending' && (
+                <span
+                  className="ml-1 inline-block h-4 w-2 translate-y-0.5 bg-current motion-safe:animate-pulse"
+                  aria-hidden="true"
+                />
+              )}
             </span>
-            {isPlaying && (
+            {isPlaying && hasCompletedTranslation && (
               <Volume2 className="mt-1.5 h-4 w-4 shrink-0 text-emerald-400 motion-safe:animate-pulse" aria-hidden="true" />
             )}
           </span>
@@ -219,11 +245,22 @@ const TranscriptRow = memo(function TranscriptRow({
             <div className="flex items-center gap-1" lang={t.locale}>
               <button
                 type="button"
-                onClick={() => isPlaying ? onStopCard() : onPlayCard(card)}
-                aria-label={isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud}
-                title={isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud}
+                disabled={!hasCompletedTranslation}
+                onClick={() => {
+                  if (!hasCompletedTranslation) return;
+                  if (isPlaying) onStopCard();
+                  else onPlayCard(card);
+                }}
+                aria-label={hasCompletedTranslation
+                  ? isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud
+                  : t.transcript.translationActionsUnavailable}
+                title={hasCompletedTranslation
+                  ? isPlaying ? t.transcript.stopSpeech : t.transcript.readAloud
+                  : t.transcript.translationActionsUnavailable}
                 className={`flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                  isPlaying
+                  !hasCompletedTranslation
+                    ? 'cursor-not-allowed text-slate-600 opacity-50 [[data-theme=light]_&]:text-slate-400'
+                    : isPlaying
                     ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 focus-visible:outline-rose-400 [[data-theme=light]_&]:text-rose-700'
                     : 'text-slate-300 hover:bg-slate-800 hover:text-indigo-300 focus-visible:outline-indigo-400 [[data-theme=light]_&]:text-slate-700 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-indigo-700'
                 }`}
@@ -234,10 +271,19 @@ const TranscriptRow = memo(function TranscriptRow({
               </button>
               <button
                 type="button"
+                disabled={!hasCompletedTranslation}
                 onClick={() => void handleCopy()}
-                aria-label={t.transcript.copyTranslation}
-                title={t.transcript.copyTranslation}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950"
+                aria-label={hasCompletedTranslation
+                  ? t.transcript.copyTranslation
+                  : t.transcript.translationActionsUnavailable}
+                title={hasCompletedTranslation
+                  ? t.transcript.copyTranslation
+                  : t.transcript.translationActionsUnavailable}
+                className={`flex min-h-11 min-w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 ${
+                  hasCompletedTranslation
+                    ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100 [[data-theme=light]_&]:text-slate-600 [[data-theme=light]_&]:hover:bg-slate-100 [[data-theme=light]_&]:hover:text-slate-950'
+                    : 'cursor-not-allowed text-slate-600 opacity-50 [[data-theme=light]_&]:text-slate-400'
+                }`}
               >
                 {copyState === 'copied'
                   ? <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />

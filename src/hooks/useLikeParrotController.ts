@@ -1,61 +1,82 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { getUiStrings } from '../constants/translations';
-import { WebSpeechRecognizer } from '../services/speechRecognition';
-import { TranslationService } from '../services/translator';
-import { SpeechService } from '../services/speechSynthesis';
 import { BuiltInTranslator } from '../services/builtInTranslator';
 import { GeminiLiveSocketService } from '../services/geminiLiveSocket';
-import { OpenAIRealtimeTranslationService } from '../services/openAiRealtimeTranslation';
 import {
-  SOUND_FIRST_MODELS,
   getSoundFirstModel,
   isSoundFirstModelId,
 } from '../services/liveTranslation';
-import { downloadTranscriptHtml } from '../services/transcriptExport';
+import { OpenAIRealtimeTranslationService } from '../services/openAiRealtimeTranslation';
+import { detectPlatformCapabilities } from '../services/platformCapabilities';
 import {
   applyThemePreference,
   deleteStoredAzureRegion,
   deleteStoredProviderApiKey,
+  readAutomaticRoutingPreference,
   readStoredApiKey,
   readStoredAzureRegion,
   readStoredProviderApiKey,
   readStoredTheme,
+  readStoredWorkflowProfileId,
+  saveAutomaticRoutingPreference,
   saveStoredAzureRegion,
   saveStoredProviderApiKey,
   saveStoredTheme,
+  saveStoredWorkflowProfileId,
 } from '../services/preferences';
+import {
+  FOLLOW_ALONG_FAST_MAX_WORDS,
+  FOLLOW_ALONG_FAST_SILENCE_MS,
+  FOLLOW_ALONG_STABLE_MAX_WORDS,
+  FOLLOW_ALONG_STABLE_SILENCE_MS,
+  resolveTranscriptCoalesce,
+  WebSpeechRecognizer,
+} from '../services/speechRecognition';
+import { SpeechService } from '../services/speechSynthesis';
+import { downloadTranscriptHtml } from '../services/transcriptExport';
 import {
   clearTranslationCards,
   deleteTranslationCard,
   loadTranslationCards,
   saveTranslationCard,
 } from '../services/translationHistory';
-import type {
-  LanguageOption,
-  PipelineEngineType,
-  PipelineSelections,
-  PipelineStatus,
-  TranslationCard,
-} from '../types';
-import type {
-  ApiKeyProvider,
-  PreferenceStorageStatus,
-  ThemePreference,
-} from '../services/preferences';
+import { TranslationService } from '../services/translator';
+import {
+  getWorkflowAvailabilities,
+  getWorkflowProfile,
+  resolveAutomaticWorkflow,
+  WORKFLOW_PROFILES,
+} from '../services/workflowProfiles';
 import type {
   LiveSocketCallbacks,
   LiveTranslationService,
   SoundFirstModelId,
 } from '../services/liveTranslation';
+import type {
+  ApiKeyProvider,
+  AutomaticRoutingPreference,
+  PreferenceStorageStatus,
+  ThemePreference,
+} from '../services/preferences';
+import type {
+  LanguageOption,
+  Stage2Option,
+  TranscriptInputMethod,
+  TranslationCard,
+  TranslationFailureReason,
+} from '../types';
+import type {
+  WorkflowAvailability,
+  WorkflowProfile,
+  WorkflowProfileId,
+} from '../services/workflowProfiles';
 
 export interface LikeParrotController {
   view: {
-    isSoundFirstPage: boolean;
     isBillingPlanPage: boolean;
     currentPath: string;
     errorMessage: string | null;
-    soundFirstLatencyMs: number;
   };
   activity: {
     isListening: boolean;
@@ -68,17 +89,17 @@ export interface LikeParrotController {
     changeSource: (language: LanguageOption) => void;
     changeTarget: (language: LanguageOption) => void;
   };
-  pipeline: {
-    status: PipelineStatus;
-    selections: PipelineSelections;
-    changeSelections: (selections: PipelineSelections) => void;
-    isListeningOrConnecting: boolean;
-  };
-  soundFirst: {
-    selectedModelId: SoundFirstModelId;
-    isSelectedModelConfigured: boolean;
-    models: typeof SOUND_FIRST_MODELS;
-    changeModel: (modelId: SoundFirstModelId) => void;
+  workflow: {
+    profiles: readonly WorkflowProfile[];
+    selectedId: WorkflowProfileId;
+    availability: Record<WorkflowProfileId, WorkflowAvailability>;
+    resolvedProfileId: WorkflowProfileId | null;
+    activeProfile: WorkflowProfile | null;
+    isSelectedAvailable: boolean;
+    isMobileDictation: boolean;
+    lastLatencyMs: number;
+    change: (profileId: WorkflowProfileId) => void;
+    submitText: (text: string) => Promise<void>;
   };
   transcript: {
     cards: TranslationCard[];
@@ -100,6 +121,7 @@ export interface LikeParrotController {
     azureApiKey: string;
     azureRegion: string;
     rememberAzureApiKey: boolean;
+    automaticRoutingPreference: AutomaticRoutingPreference;
     theme: ThemePreference;
     close: () => void;
     saveApiKey: (
@@ -109,6 +131,9 @@ export interface LikeParrotController {
       auxiliaryValue?: string
     ) => boolean;
     deleteApiKey: (provider: ApiKeyProvider) => boolean;
+    changeAutomaticRoutingPreference: (
+      preference: AutomaticRoutingPreference
+    ) => boolean;
     changeTheme: (theme: ThemePreference) => void;
   };
   actions: {
@@ -125,50 +150,59 @@ const STORAGE_SOURCE_LANGUAGE = 'likeparrot_source_language';
 const STORAGE_TARGET_LANGUAGE = 'likeparrot_target_language';
 const STORAGE_SOUND_FIRST_MODEL = 'likeparrot_sound_first_model';
 const MAX_VISIBLE_CARDS = 500;
-const MAX_PENDING_PIPELINE_JOBS = 3;
-
-const defaultSelections: PipelineSelections = {
-  stage1: 'webspeech_fast',
-  stage2: 'auto',
-  stage3: 'tts_pipelined',
-};
+const MAX_PENDING_PIPELINE_JOBS = 24;
 
 const normalizePath = (path: string): string => path.replace(/\/+$/u, '') || '/';
-
-const getStoredSoundFirstModel = (): SoundFirstModelId => {
-  try {
-    const stored = localStorage.getItem(STORAGE_SOUND_FIRST_MODEL);
-    if (isSoundFirstModelId(stored)) return stored;
-  } catch {}
-  return SOUND_FIRST_MODELS[0].id;
+const canonicalizePath = (path: string): string => {
+  const normalized = normalizePath(path);
+  return normalized === '/all_in_one' ? '/' : normalized;
 };
 
-const getStoredSelections = (): PipelineSelections => {
-  try {
-    const raw = localStorage.getItem(STORAGE_PIPELINE_SELECTIONS);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        stage1: parsed.stage1 === 'webspeech_std' ? 'webspeech_std' : 'webspeech_fast',
-        stage2: ['chrome_nano', 'gemini_stream', 'turbo_fastpath'].includes(parsed.stage2)
-          ? parsed.stage2
-          : 'auto',
-        stage3: parsed.stage3 === 'tts_standard' ? 'tts_standard' : 'tts_pipelined',
-      };
+const isWorkflowProfileId = (value: unknown): value is WorkflowProfileId =>
+  typeof value === 'string' && WORKFLOW_PROFILES.some((profile) => profile.id === value);
+
+const getInitialWorkflowProfileId = (requestedPath: string): WorkflowProfileId => {
+  const storedWorkflow = readStoredWorkflowProfileId();
+  if (isWorkflowProfileId(storedWorkflow)) return storedWorkflow;
+
+  if (normalizePath(requestedPath) === '/all_in_one') {
+    try {
+      const legacyLiveModel = window.localStorage.getItem(STORAGE_SOUND_FIRST_MODEL);
+      if (isSoundFirstModelId(legacyLiveModel)) return legacyLiveModel;
+    } catch {
+      // Continue with the former Text First selection migration.
     }
-  } catch {}
-  return defaultSelections;
+  }
+
+  try {
+    const rawSelections = window.localStorage.getItem(STORAGE_PIPELINE_SELECTIONS);
+    if (rawSelections) {
+      const selections = JSON.parse(rawSelections) as { stage1?: unknown; stage2?: unknown };
+      if (selections.stage2 === 'chrome_nano') {
+        return selections.stage1 === 'webspeech_std'
+          ? 'desktop-chrome-on-device-stable'
+          : 'desktop-chrome-on-device-fast';
+      }
+      if (selections.stage2 === 'gemini_stream') return 'desktop-webspeech-gemini-stable';
+      if (selections.stage2 === 'turbo_fastpath') return 'desktop-webspeech-azure-stable';
+    }
+  } catch {
+    // Invalid legacy preferences are safely replaced by Automatic.
+  }
+  return 'auto';
 };
 
 const getInitialLanguages = (): { source: LanguageOption; target: LanguageOption } => {
   let source = SUPPORTED_LANGUAGES[0];
   let target = SUPPORTED_LANGUAGES[1];
   try {
-    const storedSource = localStorage.getItem(STORAGE_SOURCE_LANGUAGE);
-    const storedTarget = localStorage.getItem(STORAGE_TARGET_LANGUAGE);
+    const storedSource = window.localStorage.getItem(STORAGE_SOURCE_LANGUAGE);
+    const storedTarget = window.localStorage.getItem(STORAGE_TARGET_LANGUAGE);
     source = SUPPORTED_LANGUAGES.find((language) => language.code === storedSource) ?? source;
     target = SUPPORTED_LANGUAGES.find((language) => language.code === storedTarget) ?? target;
-  } catch {}
+  } catch {
+    // Defaults remain usable when storage is restricted.
+  }
   if (source.code === target.code) {
     target = SUPPORTED_LANGUAGES.find((language) => language.code !== source.code) ?? target;
   }
@@ -177,9 +211,9 @@ const getInitialLanguages = (): { source: LanguageOption; target: LanguageOption
 
 const saveLanguagePreference = (storageKey: string, languageCode: string): void => {
   try {
-    localStorage.setItem(storageKey, languageCode);
+    window.localStorage.setItem(storageKey, languageCode);
   } catch {
-    // The current selection remains active even when browser storage is blocked.
+    // The in-memory selection remains active.
   }
 };
 
@@ -190,67 +224,46 @@ const getApiStorageError = (
   ? null
   : getUiStrings(languageCode).settings.storageError;
 
-const derivePipelineStatus = (
-  selections: PipelineSelections,
-  apiKey: string,
-  azureApiKey = '',
-  latencyMs = 0,
-  actualEngineType?: PipelineEngineType
-): PipelineStatus => {
-  let engineType: PipelineEngineType = 'network_fallback';
-  if (selections.stage2 === 'chrome_nano') {
-    engineType = 'chrome_nano';
-  } else if (selections.stage2 === 'gemini_stream') {
-    engineType = 'gemini_stream';
-  } else if (selections.stage2 === 'turbo_fastpath') {
-    engineType = 'network_fallback';
-  } else if (BuiltInTranslator.isBrowserTranslatorSupported()) {
-    engineType = 'chrome_nano';
-  } else if (apiKey) {
-    engineType = 'gemini_stream';
-  } else if (azureApiKey) {
-    engineType = 'network_fallback';
-  }
-
-  if (actualEngineType) engineType = actualEngineType;
-
-  return {
-    engineType,
-    latencyMs,
-  };
-};
-
 const createCardId = (): string =>
   typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export function useLikeParrotController(): LikeParrotController {
-  const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.pathname));
-  const isAllInOnePage = currentPath === '/all_in_one';
-  const isBillingPlanPage = currentPath === '/billingplan';
+const isLiveProfileId = (profileId: WorkflowProfileId): profileId is SoundFirstModelId =>
+  profileId === 'gemini-3.5-live-translate-preview' || profileId === 'gpt-realtime-translate';
 
+const getTranslationEngine = (profile: WorkflowProfile): Stage2Option => {
+  if (profile.translationMethod === 'chrome_translator') return 'chrome_nano';
+  if (profile.translationMethod === 'gemini_flash_lite') return 'gemini_stream';
+  if (profile.translationMethod === 'azure_translator') return 'turbo_fastpath';
+  throw new Error('The selected workflow is not a text translation pipeline.');
+};
+
+const getInputMethod = (profile: WorkflowProfile): TranscriptInputMethod =>
+  profile.inputMethod === 'mobile_keyboard' ? 'keyboard_text' : 'desktop_web_speech';
+
+const getUnavailableMessage = (
+  availability: WorkflowAvailability | undefined,
+  languageCode: string
+): string => {
+  const errors = getUiStrings(languageCode).errors;
+  if (availability?.missingCredential === 'gemini') return errors.geminiApiKeyRequired;
+  if (availability?.missingCredential === 'openai') return errors.openAiApiKeyRequired;
+  if (availability?.missingCredential === 'azure') return errors.azureApiKeyRequired;
+  return errors.workflowUnavailable;
+};
+
+export function useLikeParrotController(): LikeParrotController {
+  const requestedInitialPath = normalizePath(window.location.pathname);
+  const [currentPath, setCurrentPath] = useState(() => canonicalizePath(requestedInitialPath));
+  const isBillingPlanPage = currentPath === '/billingplan';
+  const [platformCapabilities] = useState(detectPlatformCapabilities);
   const [initialApiKeyRead] = useState(readStoredApiKey);
   const [initialOpenAiApiKeyRead] = useState(() => readStoredProviderApiKey('openai'));
   const [initialAzureApiKeyRead] = useState(() => readStoredProviderApiKey('azure'));
   const [initialAzureRegionRead] = useState(readStoredAzureRegion);
-  const [initialSoundFirstModel] = useState(getStoredSoundFirstModel);
-  const [initialSelections] = useState(() => {
-    const storedSelections = getStoredSelections();
-    if (
-      storedSelections.stage2 === 'chrome_nano' &&
-      !BuiltInTranslator.isBrowserTranslatorSupported()
-    ) {
-      return { ...storedSelections, stage2: 'auto' as const };
-    }
-    if (storedSelections.stage2 === 'gemini_stream' && !initialApiKeyRead.apiKey) {
-      return { ...storedSelections, stage2: 'auto' as const };
-    }
-    if (storedSelections.stage2 === 'turbo_fastpath' && !initialAzureApiKeyRead.apiKey) {
-      return { ...storedSelections, stage2: 'auto' as const };
-    }
-    return storedSelections;
-  });
+  const [initialLanguages] = useState(getInitialLanguages);
+
   const [apiKey, setApiKey] = useState(initialApiKeyRead.apiKey);
   const [rememberApiKey, setRememberApiKey] = useState(initialApiKeyRead.persistent);
   const [openAiApiKey, setOpenAiApiKey] = useState(initialOpenAiApiKeyRead.apiKey);
@@ -262,106 +275,172 @@ export function useLikeParrotController(): LikeParrotController {
   const [rememberAzureApiKey, setRememberAzureApiKey] = useState(
     initialAzureApiKeyRead.persistent
   );
-  const [soundFirstModelId, setSoundFirstModelId] = useState<SoundFirstModelId>(
-    initialSoundFirstModel
+  const [automaticRoutingPreference, setAutomaticRoutingPreference] = useState(
+    readAutomaticRoutingPreference
+  );
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<WorkflowProfileId>(() =>
+    getInitialWorkflowProfileId(requestedInitialPath)
   );
   const [theme, setTheme] = useState<ThemePreference>(readStoredTheme);
-  const [selections, setSelections] = useState<PipelineSelections>(initialSelections);
-  const [initialLanguages] = useState(getInitialLanguages);
   const [sourceLang, setSourceLang] = useState<LanguageOption>(initialLanguages.source);
   const [targetLang, setTargetLang] = useState<LanguageOption>(initialLanguages.target);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
-    if (!isAllInOnePage && !isBillingPlanPage && !WebSpeechRecognizer.isSupported()) {
-      return getUiStrings(initialLanguages.source.code).errors.webSpeechUnsupported;
-    }
-    return getApiStorageError(initialApiKeyRead.status, initialLanguages.source.code);
+    const storageFailure = [
+      initialApiKeyRead,
+      initialOpenAiApiKeyRead,
+      initialAzureApiKeyRead,
+      initialAzureRegionRead,
+    ].find((result) => result.status !== 'success');
+    return storageFailure
+      ? getApiStorageError(storageFailure.status, initialLanguages.source.code)
+      : null;
   });
-
   const [isListening, setIsListening] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [interimText, setInterimText] = useState('');
   const [streamingTranslation, setStreamingTranslation] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
-  const [soundFirstLatencyMs, setSoundFirstLatencyMs] = useState(0);
+  const [lastLatencyMs, setLastLatencyMs] = useState(0);
   const [cards, setCards] = useState<TranslationCard[]>([]);
   const [playingCardId, setPlayingCardId] = useState<string | null>(null);
-  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>(() =>
-    derivePipelineStatus(
-      initialSelections,
-      initialApiKeyRead.apiKey,
-      initialAzureApiKeyRead.apiKey
-    )
+
+  const credentials = useMemo(() => ({
+    gemini: Boolean(apiKey.trim()),
+    openai: Boolean(openAiApiKey.trim()),
+    azure: Boolean(azureApiKey.trim()),
+  }), [apiKey, azureApiKey, openAiApiKey]);
+  const availabilityContext = useMemo(() => ({
+    capabilities: platformCapabilities,
+    credentials,
+  }), [credentials, platformCapabilities]);
+  const resolutionOptions = useMemo(() => ({
+    mode: 'text-first' as const,
+    preferredCloudProvider: automaticRoutingPreference.preferredCloudProvider,
+    desktopEndpoint: 'stable' as const,
+    allowCloudFallback: automaticRoutingPreference.allowCloudFallback,
+  }), [automaticRoutingPreference]);
+  const workflowAvailability = useMemo(
+    () => getWorkflowAvailabilities(availabilityContext, resolutionOptions),
+    [availabilityContext, resolutionOptions]
   );
+  const automaticResolution = useMemo(
+    () => resolveAutomaticWorkflow(availabilityContext, resolutionOptions),
+    [availabilityContext, resolutionOptions]
+  );
+  const selectedProfile = getWorkflowProfile(selectedWorkflowId);
+  const activeProfile = selectedWorkflowId === 'auto'
+    ? automaticResolution.profile
+    : selectedProfile;
+  const resolvedProfileId = selectedWorkflowId === 'auto'
+    ? automaticResolution.profile?.id ?? null
+    : null;
+  const isSelectedAvailable = workflowAvailability[selectedWorkflowId].available;
 
   const recognizerRef = useRef<WebSpeechRecognizer | null>(null);
   const liveServicesRef = useRef<Partial<Record<SoundFirstModelId, LiveTranslationService>>>({});
+  const cardsRef = useRef<TranslationCard[]>([]);
   const sourceLangRef = useRef(sourceLang);
   const targetLangRef = useRef(targetLang);
   const apiKeyRef = useRef(apiKey);
+  const openAiApiKeyRef = useRef(openAiApiKey);
   const azureApiKeyRef = useRef(azureApiKey);
   const azureRegionRef = useRef(azureRegion);
-  const soundFirstModelIdRef = useRef(soundFirstModelId);
-  const selectionsRef = useRef(selections);
-  const isAllInOnePageRef = useRef(isAllInOnePage);
+  const activeProfileRef = useRef<WorkflowProfile | null>(activeProfile);
+  const workflowAvailabilityRef = useRef(workflowAvailability);
+  const currentPathRef = useRef(currentPath);
   const pipelineGenerationRef = useRef(0);
   const pipelineQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const activePipelineRequestsRef = useRef(new Set<AbortController>());
+  const activePipelineRequestsRef = useRef(new Map<string, AbortController>());
   const pendingPipelineJobsRef = useRef(0);
-  const unmuteTimerRef = useRef<number | null>(null);
+  const pendingCardIdsRef = useRef(new Set<string>());
+  const translationTokenRef = useRef(new Map<string, number>());
+  const translationSourceRef = useRef(new Map<string, string>());
+  const deletedPendingCardIdsRef = useRef(new Set<string>());
+  const resumeTimerRef = useRef<number | null>(null);
   const historyInvalidationRef = useRef(0);
   const liveUiEnabledRef = useRef(false);
   const liveStartAttemptRef = useRef(0);
 
-  const addCard = useCallback((card: TranslationCard) => {
-    setCards((previous) => [
+  const commitCards = useCallback((nextCards: TranslationCard[]) => {
+    const ordered = nextCards
+      .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime())
+      .slice(0, MAX_VISIBLE_CARDS);
+    cardsRef.current = ordered;
+    setCards(ordered);
+  }, []);
+
+  const upsertCard = useCallback((card: TranslationCard) => {
+    if (deletedPendingCardIdsRef.current.has(card.id)) return;
+    commitCards([
       card,
-      ...previous.filter((existing) => existing.id !== card.id),
-    ].slice(0, MAX_VISIBLE_CARDS));
+      ...cardsRef.current.filter((existing) => existing.id !== card.id),
+    ]);
     void saveTranslationCard(card).catch((error) => {
       console.warn('[TranslationHistory] save failed:', error);
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveTranscript);
     });
-  }, []);
+  }, [commitCards]);
 
-  const clearUnmuteTimer = useCallback(() => {
-    if (unmuteTimerRef.current !== null) {
-      window.clearTimeout(unmuteTimerRef.current);
-      unmuteTimerRef.current = null;
+  const patchCard = useCallback((
+    cardId: string,
+    patch: Partial<TranslationCard>
+  ): TranslationCard | null => {
+    if (deletedPendingCardIdsRef.current.has(cardId)) return null;
+    const existing = cardsRef.current.find((card) => card.id === cardId);
+    if (!existing) return null;
+    const updated = { ...existing, ...patch };
+    upsertCard(updated);
+    return updated;
+  }, [upsertCard]);
+
+  const clearResumeTimer = useCallback(() => {
+    if (resumeTimerRef.current !== null) {
+      window.clearTimeout(resumeTimerRef.current);
+      resumeTimerRef.current = null;
     }
   }, []);
 
-  const scheduleRecognizerUnmute = useCallback(() => {
-    clearUnmuteTimer();
-    unmuteTimerRef.current = window.setTimeout(() => {
-      unmuteTimerRef.current = null;
+  const scheduleRecognizerResume = useCallback(() => {
+    clearResumeTimer();
+    resumeTimerRef.current = window.setTimeout(() => {
+      resumeTimerRef.current = null;
       if (
-        !isAllInOnePageRef.current &&
-        !SpeechService.isSpeaking() &&
-        activePipelineRequestsRef.current.size === 0
+        currentPathRef.current === '/' &&
+        activeProfileRef.current?.inputMethod === 'desktop_web_speech' &&
+        recognizerRef.current?.isDesiredListening() &&
+        !SpeechService.isSpeaking()
       ) {
         setIsSpeaking(false);
-        recognizerRef.current?.setMuted(false);
+        recognizerRef.current?.resumeAfterPlayback();
       }
     }, 300);
-  }, [clearUnmuteTimer]);
+  }, [clearResumeTimer]);
 
-  const cancelPipeline = useCallback(() => {
+  const cancelPipeline = useCallback((markInterrupted = true) => {
     pipelineGenerationRef.current += 1;
-    for (const controller of activePipelineRequestsRef.current) controller.abort();
+    for (const controller of activePipelineRequestsRef.current.values()) controller.abort();
     activePipelineRequestsRef.current.clear();
+    if (markInterrupted) {
+      for (const cardId of pendingCardIdsRef.current) {
+        patchCard(cardId, {
+          translationStatus: 'failed',
+          translationFailureReason: 'interrupted',
+          translationFailureDetail: undefined,
+        });
+      }
+    }
+    pendingCardIdsRef.current.clear();
     pendingPipelineJobsRef.current = 0;
-    // New speech must not wait behind an old browser model download that the
-    // platform itself may continue in the background.
     pipelineQueueRef.current = Promise.resolve();
-  }, []);
+  }, [patchCard]);
 
   const stopWorkflow = useCallback(() => {
     liveUiEnabledRef.current = false;
     liveStartAttemptRef.current += 1;
-    cancelPipeline();
-    clearUnmuteTimer();
+    cancelPipeline(true);
+    clearResumeTimer();
     recognizerRef.current?.stop();
     for (const service of Object.values(liveServicesRef.current)) void service?.stop();
     SpeechService.stop();
@@ -372,7 +451,282 @@ export function useLikeParrotController(): LikeParrotController {
     setPlayingCardId(null);
     setInterimText('');
     setStreamingTranslation('');
-  }, [cancelPipeline, clearUnmuteTimer]);
+  }, [cancelPipeline, clearResumeTimer]);
+
+  const queueSourceTranslation = useCallback((
+    sourceText: string,
+    inputMethod?: TranscriptInputMethod
+  ): Promise<void> => {
+    let cleanText = sourceText.replace(/\s+/gu, ' ').trim();
+    if (!cleanText) return Promise.reject(new Error('Source text is empty.'));
+    const profile = activeProfileRef.current;
+    if (!profile || profile.kind !== 'text-pipeline') {
+      const error = new Error('The selected workflow cannot translate submitted text.');
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.workflowUnavailable);
+      return Promise.reject(error);
+    }
+
+    const currentSource = sourceLangRef.current;
+    const currentTarget = targetLangRef.current;
+    if (currentSource.code === currentTarget.code) {
+      const error = new Error('Source and target languages must differ.');
+      setErrorMessage(getUiStrings(currentSource.code).errors.chooseDifferentLanguages);
+      return Promise.reject(error);
+    }
+
+    const resolvedInputMethod = inputMethod ?? getInputMethod(profile);
+    let existingCardId: string | null = null;
+    if (resolvedInputMethod === 'desktop_web_speech') {
+      const recentSources = cardsRef.current
+        .filter((card) => card.inputMethod === 'desktop_web_speech')
+        .slice(0, 6)
+        .map((card) => card.sourceText);
+      const decision = resolveTranscriptCoalesce(recentSources, cleanText);
+      if (decision.action === 'skip') return Promise.resolve();
+      if (decision.action === 'replace') {
+        const target = cardsRef.current.find((card) => card.inputMethod === 'desktop_web_speech');
+        if (target) {
+          existingCardId = target.id;
+          cleanText = decision.combined;
+          patchCard(target.id, {
+            sourceText: cleanText,
+            translatedText: '',
+            translationStatus: 'pending',
+            translationFailureReason: undefined,
+            translationFailureDetail: undefined,
+          });
+        } else {
+          cleanText = decision.combined;
+        }
+      } else {
+        cleanText = decision.text;
+      }
+    }
+
+    const cardId = existingCardId ?? createCardId();
+    const receivedAt = performance.now();
+    if (!existingCardId) {
+      upsertCard({
+        id: cardId,
+        timestamp: new Date(),
+        sourceText: cleanText,
+        translatedText: '',
+        translationStatus: 'pending',
+        inputMethod: resolvedInputMethod,
+        workflowId: profile.id,
+        sourceLang: currentSource.name,
+        sourceLangCode: currentSource.code,
+        targetLang: currentTarget.name,
+        targetLangCode: currentTarget.speechCode,
+        pipelineTag: profile.shortLabel,
+      });
+    }
+
+    if (pendingPipelineJobsRef.current >= MAX_PENDING_PIPELINE_JOBS && !existingCardId) {
+      patchCard(cardId, {
+        translationStatus: 'failed',
+        translationFailureReason: 'translation_failed',
+        translationFailureDetail: 'Translation queue is full.',
+      });
+      const error = new Error('Translation queue is full.');
+      setErrorMessage(getUiStrings(currentSource.code).errors.speechTooFast);
+      return Promise.reject(error);
+    }
+
+    const jobToken = (translationTokenRef.current.get(cardId) ?? 0) + 1;
+    translationTokenRef.current.set(cardId, jobToken);
+    translationSourceRef.current.set(cardId, cleanText);
+    if (existingCardId) {
+      activePipelineRequestsRef.current.get(cardId)?.abort();
+      SpeechService.cancelGroup(cardId);
+    }
+    if (!pendingCardIdsRef.current.has(cardId)) {
+      pendingPipelineJobsRef.current += 1;
+      pendingCardIdsRef.current.add(cardId);
+    }
+    setInterimText('');
+    setStreamingTranslation('');
+    setIsTranslating(true);
+    const generation = pipelineGenerationRef.current;
+    const currentKey = apiKeyRef.current;
+    const currentAzureCredentials = {
+      apiKey: azureApiKeyRef.current,
+      region: azureRegionRef.current,
+    };
+    const speechGroupId = cardId;
+
+    const processTranslation = async () => {
+      if (translationTokenRef.current.get(cardId) !== jobToken) return;
+      const controller = new AbortController();
+      activePipelineRequestsRef.current.set(cardId, controller);
+      const textForTranslation = translationSourceRef.current.get(cardId) ?? cleanText;
+
+      try {
+        if (generation !== pipelineGenerationRef.current) {
+          throw new DOMException('Workflow changed', 'AbortError');
+        }
+        if (deletedPendingCardIdsRef.current.has(cardId)) {
+          throw new DOMException('Transcript entry deleted', 'AbortError');
+        }
+        const result = await TranslationService.translateWithPipeline(
+          textForTranslation,
+          currentSource.name,
+          currentSource.code,
+          currentTarget.name,
+          currentTarget.code,
+          currentKey,
+          currentAzureCredentials,
+          (_chunk, accumulated) => {
+            if (
+              generation === pipelineGenerationRef.current &&
+              !deletedPendingCardIdsRef.current.has(cardId)
+            ) {
+              setStreamingTranslation(accumulated);
+            }
+          },
+          undefined,
+          getTranslationEngine(profile),
+          controller.signal
+        );
+
+        if (
+          generation !== pipelineGenerationRef.current ||
+          deletedPendingCardIdsRef.current.has(cardId)
+        ) {
+          throw new DOMException('Workflow changed', 'AbortError');
+        }
+        const endToEndLatencyMs = Math.max(0, Math.round(performance.now() - receivedAt));
+        patchCard(cardId, {
+          translatedText: result.translatedText,
+          translationStatus: 'complete',
+          translationFailureReason: undefined,
+          translationFailureDetail: undefined,
+          pipelineTag: result.engineName.replace(/^[^\s]+\s/u, ''),
+          latencyMs: endToEndLatencyMs,
+        });
+        setLastLatencyMs(endToEndLatencyMs);
+
+        // Desktop follow-along keeps the microphone open. Automatic TTS would
+        // abort recognition and drop the next utterance, so playback is manual.
+        if (result.translatedText.trim() && profile.inputMethod !== 'desktop_web_speech') {
+          SpeechService.enqueueChunk(
+            result.translatedText,
+            currentTarget.speechCode,
+            () => {
+              clearResumeTimer();
+              setIsSpeaking(true);
+            },
+            () => {
+              setIsSpeaking(SpeechService.isSpeaking());
+              scheduleRecognizerResume();
+            },
+            (error) => {
+              console.warn('[TTS] sentence playback failed:', error);
+              setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
+            },
+            speechGroupId
+          );
+        }
+      } catch (error) {
+        if (translationTokenRef.current.get(cardId) !== jobToken) return;
+        SpeechService.cancelGroup(speechGroupId);
+        const aborted = controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError');
+        if (
+          !deletedPendingCardIdsRef.current.has(cardId) &&
+          generation === pipelineGenerationRef.current
+        ) {
+          const failureReason: TranslationFailureReason = aborted
+            ? 'cancelled'
+            : 'translation_failed';
+          patchCard(cardId, {
+            translationStatus: 'failed',
+            translationFailureReason: failureReason,
+            translationFailureDetail: error instanceof Error ? error.message : String(error),
+          });
+        }
+        if (!aborted && generation === pipelineGenerationRef.current) {
+          console.warn('[Translation] pipeline failed:', error);
+          setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.translationFailed);
+        }
+        throw error;
+      } finally {
+        if (translationTokenRef.current.get(cardId) === jobToken) {
+          activePipelineRequestsRef.current.delete(cardId);
+          pendingCardIdsRef.current.delete(cardId);
+          deletedPendingCardIdsRef.current.delete(cardId);
+          translationSourceRef.current.delete(cardId);
+          pendingPipelineJobsRef.current = Math.max(0, pendingPipelineJobsRef.current - 1);
+          if (
+            generation === pipelineGenerationRef.current &&
+            pendingPipelineJobsRef.current === 0
+          ) {
+            setIsTranslating(false);
+            setStreamingTranslation('');
+            scheduleRecognizerResume();
+          }
+        }
+      }
+    };
+
+    const runQueuedTranslation = () => processTranslation();
+    const operation = pipelineQueueRef.current.then(runQueuedTranslation, runQueuedTranslation);
+    pipelineQueueRef.current = operation.catch(() => {});
+    return operation;
+  }, [clearResumeTimer, patchCard, scheduleRecognizerResume, upsertCard]);
+
+  useEffect(() => {
+    if (requestedInitialPath === '/all_in_one') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [requestedInitialPath]);
+
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
+
+  useEffect(() => {
+    sourceLangRef.current = sourceLang;
+    document.documentElement.lang = sourceLang.speechCode;
+    const strings = getUiStrings(sourceLang.code);
+    document.title = isBillingPlanPage
+      ? `LikeParrot - ${strings.header.billingPlan}`
+      : `LikeParrot - ${strings.controls.ariaLabel}`;
+  }, [isBillingPlanPage, sourceLang]);
+
+  useEffect(() => {
+    targetLangRef.current = targetLang;
+  }, [targetLang]);
+
+  useEffect(() => {
+    apiKeyRef.current = apiKey;
+    openAiApiKeyRef.current = openAiApiKey;
+    azureApiKeyRef.current = azureApiKey;
+    azureRegionRef.current = azureRegion;
+  }, [apiKey, azureApiKey, azureRegion, openAiApiKey]);
+
+  useEffect(() => {
+    activeProfileRef.current = activeProfile;
+    workflowAvailabilityRef.current = workflowAvailability;
+    if (activeProfile?.endpointProfile) {
+      const isFast = activeProfile.endpointProfile === 'fast';
+      recognizerRef.current?.setSilenceDelay(
+        isFast ? FOLLOW_ALONG_FAST_SILENCE_MS : FOLLOW_ALONG_STABLE_SILENCE_MS
+      );
+      recognizerRef.current?.setMaxBufferWords(
+        isFast ? FOLLOW_ALONG_FAST_MAX_WORDS : FOLLOW_ALONG_STABLE_MAX_WORDS
+      );
+    }
+  }, [activeProfile, workflowAvailability]);
+
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  }, [currentPath]);
+
+  useEffect(() => applyThemePreference(theme, (resolvedTheme) => {
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = resolvedTheme === 'dark' ? '#4f46e5' : '#f8fafc';
+  }), [theme]);
 
   useEffect(() => {
     let active = true;
@@ -380,13 +734,9 @@ export function useLikeParrotController(): LikeParrotController {
     void loadTranslationCards()
       .then((storedCards) => {
         if (!active || invalidationAtStart !== historyInvalidationRef.current) return;
-        setCards((currentCards) => {
-          const merged = new Map(storedCards.map((card) => [card.id, card]));
-          for (const card of currentCards) merged.set(card.id, card);
-          return [...merged.values()].sort(
-            (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
-          ).slice(0, MAX_VISIBLE_CARDS);
-        });
+        const merged = new Map(storedCards.map((card) => [card.id, card]));
+        for (const card of cardsRef.current) merged.set(card.id, card);
+        commitCards([...merged.values()]);
       })
       .catch((error) => {
         console.warn('[TranslationHistory] load failed:', error);
@@ -397,65 +747,13 @@ export function useLikeParrotController(): LikeParrotController {
     return () => {
       active = false;
     };
-  }, []);
+  }, [commitCards]);
 
   useEffect(() => {
-    isAllInOnePageRef.current = isAllInOnePage;
-  }, [isAllInOnePage]);
-
-  useEffect(() => {
-    sourceLangRef.current = sourceLang;
-    document.documentElement.lang = sourceLang.speechCode;
-    const strings = getUiStrings(sourceLang.code);
-    document.title = isBillingPlanPage
-      ? `LikeParrot - ${strings.header.billingPlan}`
-      : `LikeParrot - ${strings.modes.audioFirst} · ${strings.modes.textFirst}`;
-  }, [currentPath, isBillingPlanPage, sourceLang]);
-
-  useEffect(() => {
-    targetLangRef.current = targetLang;
-  }, [targetLang]);
-
-  useEffect(() => {
-    apiKeyRef.current = apiKey;
-  }, [apiKey]);
-
-  useEffect(() => {
-    azureApiKeyRef.current = azureApiKey;
-    azureRegionRef.current = azureRegion;
-  }, [azureApiKey, azureRegion]);
-
-  useEffect(() => {
-    soundFirstModelIdRef.current = soundFirstModelId;
-  }, [soundFirstModelId]);
-
-  useEffect(() => applyThemePreference(theme, (resolvedTheme) => {
-    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (themeColor) themeColor.content = resolvedTheme === 'dark' ? '#4f46e5' : '#f8fafc';
-  }), [theme]);
-
-  useEffect(() => {
-    selectionsRef.current = selections;
-    recognizerRef.current?.setSilenceDelay(selections.stage1 === 'webspeech_std' ? 1000 : 600);
-  }, [selections]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      stopWorkflow();
-      const nextPath = normalizePath(window.location.pathname);
-      isAllInOnePageRef.current = nextPath === '/all_in_one';
-      setCurrentPath(nextPath);
-      if (nextPath === '/' && !WebSpeechRecognizer.isSupported()) {
-        setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.webSpeechUnsupported);
-      } else {
-        setErrorMessage(null);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [stopWorkflow]);
-
-  useEffect(() => {
+    const canUpdateLiveUi = (modelId: SoundFirstModelId) =>
+      liveUiEnabledRef.current &&
+      currentPathRef.current === '/' &&
+      activeProfileRef.current?.id === modelId;
     const createCallbacks = (modelId: SoundFirstModelId): LiveSocketCallbacks => ({
       onInputTranscript: (text) => {
         if (canUpdateLiveUi(modelId)) setInterimText(text);
@@ -479,13 +777,16 @@ export function useLikeParrotController(): LikeParrotController {
         const currentTarget = SUPPORTED_LANGUAGES.find(
           (language) => language.code === targetLanguageCode
         ) ?? targetLangRef.current;
-        if (canUpdateLiveUi(modelId)) setSoundFirstLatencyMs(latencyMs);
-        addCard({
+        if (canUpdateLiveUi(modelId)) setLastLatencyMs(latencyMs);
+        upsertCard({
           id: createCardId(),
           timestamp: new Date(),
           sourceText,
           sourceTextUnavailable: !sourceText,
           translatedText,
+          translationStatus: 'complete',
+          inputMethod: 'live_audio',
+          workflowId: modelId,
           sourceLang: currentSource.name,
           sourceLangCode: currentSource.code,
           targetLang: currentTarget.name,
@@ -515,10 +816,6 @@ export function useLikeParrotController(): LikeParrotController {
         }
       },
     });
-    const canUpdateLiveUi = (modelId: SoundFirstModelId) =>
-      liveUiEnabledRef.current &&
-      isAllInOnePageRef.current &&
-      soundFirstModelIdRef.current === modelId;
     const geminiService = new GeminiLiveSocketService(
       createCallbacks('gemini-3.5-live-translate-preview')
     );
@@ -534,262 +831,94 @@ export function useLikeParrotController(): LikeParrotController {
       openAiService.dispose();
       liveServicesRef.current = {};
     };
-  }, [addCard]);
+  }, [upsertCard]);
 
   useEffect(() => {
     if (!WebSpeechRecognizer.isSupported()) return;
     const recognizer = new WebSpeechRecognizer();
-    recognizer.setSilenceDelay(selectionsRef.current.stage1 === 'webspeech_std' ? 1000 : 600);
-
     recognizer.onStateChange = (listening) => {
-      if (!isAllInOnePageRef.current) {
+      if (
+        currentPathRef.current === '/' &&
+        activeProfileRef.current?.inputMethod === 'desktop_web_speech'
+      ) {
         setIsConnecting(false);
         setIsListening(listening);
       }
       if (!listening) setInterimText('');
     };
     recognizer.onInterimTranscript = (text) => {
-      if (!isAllInOnePageRef.current) setInterimText(text);
+      if (
+        currentPathRef.current === '/' &&
+        activeProfileRef.current?.inputMethod === 'desktop_web_speech'
+      ) {
+        setInterimText(text);
+      }
     };
     recognizer.onError = (message) => {
       console.warn('[Web Speech] recognition error:', message);
-      if (!isAllInOnePageRef.current) {
+      if (activeProfileRef.current?.inputMethod === 'desktop_web_speech') {
         setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.textFirstInit);
         setIsConnecting(false);
         setIsListening(false);
       }
     };
     recognizer.onFinalTranscript = (finalText) => {
-      if (!finalText.trim() || isAllInOnePageRef.current) return;
-      if (pendingPipelineJobsRef.current >= MAX_PENDING_PIPELINE_JOBS) {
-        setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.speechTooFast);
-        return;
-      }
-      pendingPipelineJobsRef.current += 1;
-      const generation = pipelineGenerationRef.current;
-      const receivedAt = performance.now();
-      const speechGroupId = createCardId();
-      const currentSource = sourceLangRef.current;
-      const currentTarget = targetLangRef.current;
-      const currentSelections = selectionsRef.current;
-      const currentKey = apiKeyRef.current;
-      const currentAzureCredentials = {
-        apiKey: azureApiKeyRef.current,
-        region: azureRegionRef.current,
-      };
-
-      const processTranslation = async () => {
-        if (generation !== pipelineGenerationRef.current) return;
-        const controller = new AbortController();
-        activePipelineRequestsRef.current.add(controller);
-        setInterimText('');
-        setStreamingTranslation('');
-        setIsTranslating(true);
-
-        try {
-          const result = await TranslationService.translateWithPipeline(
-            finalText,
-            currentSource.name,
-            currentSource.code,
-            currentTarget.name,
-            currentTarget.code,
-            currentKey,
-            currentAzureCredentials,
-            (_chunk, accumulated) => {
-              if (generation === pipelineGenerationRef.current) {
-                setStreamingTranslation(accumulated);
-              }
-            },
-            (clause) => {
-              if (
-                generation !== pipelineGenerationRef.current ||
-                currentSelections.stage3 !== 'tts_pipelined'
-              ) return;
-              recognizer.setMuted(true);
-              SpeechService.enqueueChunk(
-                clause,
-                currentTarget.speechCode,
-                () => {
-                  clearUnmuteTimer();
-                  setIsSpeaking(true);
-                  recognizer.setMuted(true);
-                },
-                () => {
-                  setIsSpeaking(SpeechService.isSpeaking());
-                  scheduleRecognizerUnmute();
-                },
-                (error) => {
-                  console.warn('[TTS] pipelined playback failed:', error);
-                  setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
-                },
-                speechGroupId
-              );
-            },
-            currentSelections.stage2,
-            controller.signal
-          );
-
-          if (generation !== pipelineGenerationRef.current) return;
-          const endToEndLatencyMs = Math.max(0, Math.round(performance.now() - receivedAt));
-          const card: TranslationCard = {
-            id: createCardId(),
-            timestamp: new Date(),
-            sourceText: finalText,
-            translatedText: result.translatedText,
-            sourceLang: currentSource.name,
-            sourceLangCode: currentSource.code,
-            targetLang: currentTarget.name,
-            targetLangCode: currentTarget.speechCode,
-            pipelineTag: result.engineName.replace(/^[^\s]+\s/u, ''),
-            latencyMs: endToEndLatencyMs,
-          };
-          addCard(card);
-          setPipelineStatus(
-            derivePipelineStatus(
-              currentSelections,
-              currentKey,
-              currentAzureCredentials.apiKey,
-              endToEndLatencyMs,
-              result.engineType
-            )
-          );
-
-          if (currentSelections.stage3 === 'tts_standard') {
-            recognizer.setMuted(true);
-            SpeechService.enqueueChunk(
-              result.translatedText,
-              currentTarget.speechCode,
-              () => {
-                clearUnmuteTimer();
-                setIsSpeaking(true);
-                recognizer.setMuted(true);
-              },
-              () => {
-                setIsSpeaking(SpeechService.isSpeaking());
-                scheduleRecognizerUnmute();
-              },
-              (error) => {
-                console.warn('[TTS] sentence playback failed:', error);
-                setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
-              },
-              speechGroupId
-            );
-          }
-        } catch (error) {
-          SpeechService.cancelGroup(speechGroupId);
-          if (!controller.signal.aborted && generation === pipelineGenerationRef.current) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.warn('[Translation] pipeline failed:', message);
-            setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.translationFailed);
-          }
-        } finally {
-          activePipelineRequestsRef.current.delete(controller);
-          if (
-            generation === pipelineGenerationRef.current &&
-            activePipelineRequestsRef.current.size === 0
-          ) {
-            setIsTranslating(false);
-            setStreamingTranslation('');
-            scheduleRecognizerUnmute();
-          }
-        }
-      };
-
-      const runQueuedTranslation = () => processTranslation().finally(() => {
-        if (generation === pipelineGenerationRef.current) {
-          pendingPipelineJobsRef.current = Math.max(0, pendingPipelineJobsRef.current - 1);
-        }
-      });
-      const queued = pipelineQueueRef.current.then(runQueuedTranslation, runQueuedTranslation);
-      pipelineQueueRef.current = queued.catch(() => {});
+      if (
+        currentPathRef.current !== '/' ||
+        activeProfileRef.current?.inputMethod !== 'desktop_web_speech'
+      ) return;
+      void queueSourceTranslation(finalText, 'desktop_web_speech').catch(() => {});
     };
-
     recognizerRef.current = recognizer;
     return () => {
       recognizer.stop();
       if (recognizerRef.current === recognizer) recognizerRef.current = null;
     };
-  }, [addCard, clearUnmuteTimer, scheduleRecognizerUnmute]);
+  }, [queueSourceTranslation]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      stopWorkflow();
+      const requestedPath = normalizePath(window.location.pathname);
+      const nextPath = canonicalizePath(requestedPath);
+      if (requestedPath === '/all_in_one') window.history.replaceState({}, '', '/');
+      currentPathRef.current = nextPath;
+      setCurrentPath(nextPath);
+      setErrorMessage(null);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [stopWorkflow]);
 
   useEffect(() => () => {
-    cancelPipeline();
-    clearUnmuteTimer();
+    cancelPipeline(true);
+    clearResumeTimer();
     SpeechService.stop();
-  }, [cancelPipeline, clearUnmuteTimer]);
+  }, [cancelPipeline, clearResumeTimer]);
 
   const handleNavigate = useCallback((path: string) => {
     stopWorkflow();
-    const nextPath = normalizePath(path);
-    isAllInOnePageRef.current = nextPath === '/all_in_one';
+    const nextPath = canonicalizePath(path);
+    currentPathRef.current = nextPath;
     window.history.pushState({}, '', nextPath);
     setCurrentPath(nextPath);
-    if (nextPath === '/' && !WebSpeechRecognizer.isSupported()) {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.webSpeechUnsupported);
-    } else {
-      setErrorMessage(null);
-    }
+    setErrorMessage(null);
   }, [stopWorkflow]);
 
-  const handleSelectionChange = useCallback((nextSelections: PipelineSelections) => {
-    if (
-      nextSelections.stage2 === 'chrome_nano' &&
-      selectionsRef.current.stage2 !== 'chrome_nano' &&
-      !BuiltInTranslator.isBrowserTranslatorSupported()
-    ) {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.browserTranslatorUnavailable);
+  const handleWorkflowChange = useCallback((profileId: WorkflowProfileId) => {
+    const profileAvailability = workflowAvailabilityRef.current[profileId];
+    if (!profileAvailability?.available) {
+      setErrorMessage(getUnavailableMessage(profileAvailability, sourceLangRef.current.code));
       return;
     }
-    if (
-      nextSelections.stage2 === 'gemini_stream' &&
-      selectionsRef.current.stage2 !== 'gemini_stream' &&
-      !apiKey.trim()
-    ) {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.geminiApiKeyRequired);
-      return;
-    }
-    if (
-      nextSelections.stage2 === 'turbo_fastpath' &&
-      selectionsRef.current.stage2 !== 'turbo_fastpath' &&
-      !azureApiKey.trim()
-    ) {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.azureApiKeyRequired);
-      return;
-    }
+    if (profileId === selectedWorkflowId) return;
     stopWorkflow();
     setErrorMessage(null);
-    try {
-      localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
-    } catch (error) {
-      console.warn('[Storage] pipeline selection save failed:', error);
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.savePipeline);
+    setSelectedWorkflowId(profileId);
+    if (!saveStoredWorkflowProfileId(profileId)) {
+      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveWorkflow);
     }
-    setSelections(nextSelections);
-    setPipelineStatus(derivePipelineStatus(nextSelections, apiKey, azureApiKey));
-  }, [apiKey, azureApiKey, stopWorkflow]);
-
-  const handleSoundFirstModelChange = useCallback((modelId: SoundFirstModelId) => {
-    const model = getSoundFirstModel(modelId);
-    const hasProviderKey = model.provider === 'openai'
-      ? Boolean(openAiApiKey.trim())
-      : Boolean(apiKey.trim());
-    if (!hasProviderKey) {
-      const errors = getUiStrings(sourceLangRef.current.code).errors;
-      setErrorMessage(model.provider === 'openai'
-        ? errors.openAiApiKeyRequired
-        : errors.geminiApiKeyRequired);
-      return;
-    }
-    if (modelId === soundFirstModelIdRef.current) return;
-    stopWorkflow();
-    setErrorMessage(null);
-    soundFirstModelIdRef.current = modelId;
-    setSoundFirstModelId(modelId);
-    try {
-      localStorage.setItem(STORAGE_SOUND_FIRST_MODEL, modelId);
-    } catch {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.savePipeline);
-    }
-  }, [apiKey, openAiApiKey, stopWorkflow]);
+  }, [selectedWorkflowId, stopWorkflow]);
 
   const handleSaveApiKey = useCallback((
     provider: ApiKeyProvider,
@@ -808,16 +937,20 @@ export function useLikeParrotController(): LikeParrotController {
     );
     if (sessionSaved) {
       if (provider === 'gemini') {
+        apiKeyRef.current = cleanKey;
         setApiKey(cleanKey);
         setRememberApiKey(keyStatus === 'legacy-cleanup-failed'
           ? rememberApiKey
           : rememberOnDevice);
       } else if (provider === 'openai') {
+        openAiApiKeyRef.current = cleanKey;
         setOpenAiApiKey(cleanKey);
         setRememberOpenAiApiKey(keyStatus === 'legacy-cleanup-failed'
           ? rememberOpenAiApiKey
           : rememberOnDevice);
       } else {
+        azureApiKeyRef.current = cleanKey;
+        azureRegionRef.current = auxiliaryValue.trim().toLowerCase();
         setAzureApiKey(cleanKey);
         setAzureRegion(auxiliaryValue.trim().toLowerCase());
         setRememberAzureApiKey(status === 'legacy-cleanup-failed'
@@ -826,89 +959,46 @@ export function useLikeParrotController(): LikeParrotController {
       }
     }
     setErrorMessage(getApiStorageError(status, sourceLangRef.current.code));
-    if (provider === 'gemini' || provider === 'azure') {
-      setPipelineStatus(derivePipelineStatus(
-        selections,
-        provider === 'gemini' && sessionSaved ? cleanKey : apiKey,
-        provider === 'azure' && sessionSaved ? cleanKey : azureApiKey
-      ));
-    }
     return status === 'success';
-  }, [
-    apiKey,
-    azureApiKey,
-    rememberApiKey,
-    rememberAzureApiKey,
-    rememberOpenAiApiKey,
-    selections,
-  ]);
+  }, [rememberApiKey, rememberAzureApiKey, rememberOpenAiApiKey]);
 
   const handleDeleteApiKey = useCallback((provider: ApiKeyProvider): boolean => {
     stopWorkflow();
     const keyStatus = deleteStoredProviderApiKey(provider);
     const regionStatus = provider === 'azure' ? deleteStoredAzureRegion() : 'success';
     const status = keyStatus !== 'success' ? keyStatus : regionStatus;
-    const deleted = status === 'success';
-    let nextGeminiSelections = selectionsRef.current;
-    // Honor the user's delete intent in the running app even if a browser
-    // storage backend refuses cleanup. A failed copy can only reappear after a
-    // reload, which the warning below makes explicit.
     if (provider === 'gemini') {
+      apiKeyRef.current = '';
       setApiKey('');
       setRememberApiKey(false);
-      if (selectionsRef.current.stage2 === 'gemini_stream') {
-        const nextSelections: PipelineSelections = {
-          ...selectionsRef.current,
-          stage2: 'auto',
-        };
-        nextGeminiSelections = nextSelections;
-        selectionsRef.current = nextSelections;
-        setSelections(nextSelections);
-        try {
-          localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
-        } catch {
-          // The key deletion remains successful even if the safe fallback
-          // selection cannot be persisted.
-        }
-      }
     } else if (provider === 'openai') {
+      openAiApiKeyRef.current = '';
       setOpenAiApiKey('');
       setRememberOpenAiApiKey(false);
     } else {
+      azureApiKeyRef.current = '';
+      azureRegionRef.current = '';
       setAzureApiKey('');
       setAzureRegion('');
       setRememberAzureApiKey(false);
-      if (selectionsRef.current.stage2 === 'turbo_fastpath') {
-        const nextSelections: PipelineSelections = {
-          ...selectionsRef.current,
-          stage2: 'auto',
-        };
-        nextGeminiSelections = nextSelections;
-        selectionsRef.current = nextSelections;
-        setSelections(nextSelections);
-        try {
-          localStorage.setItem(STORAGE_PIPELINE_SELECTIONS, JSON.stringify(nextSelections));
-        } catch {}
-      }
     }
-    if (status === 'success') {
-      setErrorMessage(null);
-    } else if (status === 'legacy-cleanup-failed') {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
-    } else if (status === 'session-failed') {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
-    } else {
-      setErrorMessage(getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
-    }
-    if (provider === 'gemini' || provider === 'azure') {
-      setPipelineStatus(derivePipelineStatus(
-        nextGeminiSelections,
-        provider === 'gemini' ? '' : apiKey,
-        provider === 'azure' ? '' : azureApiKey
-      ));
-    }
-    return deleted;
-  }, [apiKey, azureApiKey, stopWorkflow]);
+    setErrorMessage(status === 'success'
+      ? null
+      : getUiStrings(sourceLangRef.current.code).settings.incompleteDeleteError);
+    return status === 'success';
+  }, [stopWorkflow]);
+
+  const handleAutomaticRoutingPreferenceChange = useCallback((
+    preference: AutomaticRoutingPreference
+  ): boolean => {
+    stopWorkflow();
+    setAutomaticRoutingPreference(preference);
+    const saved = saveAutomaticRoutingPreference(preference);
+    setErrorMessage(saved
+      ? null
+      : getUiStrings(sourceLangRef.current.code).settings.storageError);
+    return saved;
+  }, [stopWorkflow]);
 
   const handleThemeChange = useCallback((nextTheme: ThemePreference) => {
     setTheme(nextTheme);
@@ -918,20 +1008,19 @@ export function useLikeParrotController(): LikeParrotController {
   }, []);
 
   const handleSaveTranscript = useCallback(() => {
-    if (cards.length === 0) return;
+    if (cardsRef.current.length === 0) return;
     try {
-      const strings = getUiStrings(sourceLang.code);
-      downloadTranscriptHtml(cards, {
+      const strings = getUiStrings(sourceLangRef.current.code);
+      downloadTranscriptHtml(cardsRef.current, {
         title: strings.transcript.htmlTitle,
         locale: strings.locale,
-        uiLanguageCode: sourceLang.code,
+        uiLanguageCode: sourceLangRef.current.code,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('[Transcript] HTML export failed:', message);
+      console.warn('[Transcript] HTML export failed:', error);
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveHtmlFailed);
     }
-  }, [cards, sourceLang.code]);
+  }, []);
 
   const handleToggleListening = useCallback(async () => {
     setErrorMessage(null);
@@ -939,31 +1028,35 @@ export function useLikeParrotController(): LikeParrotController {
       stopWorkflow();
       return;
     }
+    const profile = activeProfileRef.current;
+    const selectedAvailability = workflowAvailabilityRef.current[selectedWorkflowId];
+    if (!profile || !selectedAvailability?.available) {
+      setErrorMessage(getUnavailableMessage(selectedAvailability, sourceLang.code));
+      return;
+    }
     if (sourceLang.code === targetLang.code) {
       setErrorMessage(getUiStrings(sourceLang.code).errors.chooseDifferentLanguages);
       return;
     }
+    if (profile.inputMethod === 'mobile_keyboard') return;
 
-    cancelPipeline();
+    cancelPipeline(true);
     setIsTranslating(false);
     setStreamingTranslation('');
-    clearUnmuteTimer();
+    clearResumeTimer();
     setPlayingCardId(null);
     setIsSpeaking(false);
     SpeechService.stop();
 
-    if (isAllInOnePage) {
-      const selectedModel = getSoundFirstModel(soundFirstModelId);
-      const selectedApiKey = selectedModel.provider === 'openai' ? openAiApiKey : apiKey;
+    if (profile.kind === 'realtime-audio' && isLiveProfileId(profile.id)) {
+      const selectedApiKey = profile.credentialProvider === 'openai'
+        ? openAiApiKeyRef.current
+        : apiKeyRef.current;
       if (!selectedApiKey.trim()) {
-        const strings = getUiStrings(sourceLang.code);
-        setErrorMessage(selectedModel.provider === 'openai'
-          ? strings.errors.audioFirstNeedsOpenAiKey
-          : strings.errors.audioFirstNeedsKey);
-        setIsSettingsOpen(true);
+        setErrorMessage(getUnavailableMessage(selectedAvailability, sourceLang.code));
         return;
       }
-      const liveService = liveServicesRef.current[soundFirstModelId];
+      const liveService = liveServicesRef.current[profile.id];
       if (!liveService) {
         setErrorMessage(getUiStrings(sourceLang.code).errors.audioFirstInit);
         return;
@@ -975,43 +1068,56 @@ export function useLikeParrotController(): LikeParrotController {
         await liveService.stop();
         if (
           startAttempt !== liveStartAttemptRef.current ||
-          !isAllInOnePageRef.current
+          activeProfileRef.current?.id !== profile.id ||
+          currentPathRef.current !== '/'
         ) return;
         liveUiEnabledRef.current = true;
-        await liveService.start(selectedApiKey, sourceLang.code, targetLang.code);
+        await liveService.start(
+          selectedApiKey,
+          sourceLangRef.current.code,
+          targetLangRef.current.code
+        );
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         if (startAttempt !== liveStartAttemptRef.current) return;
         liveUiEnabledRef.current = false;
         setIsConnecting(false);
         setIsListening(false);
-        console.warn(`[${selectedModel.shortLabel}] start failed:`, error);
+        console.warn(`[${profile.shortLabel}] start failed:`, error);
         setErrorMessage(getUiStrings(sourceLang.code).errors.audioFirstInit);
       }
       return;
     }
 
+    if (profile.inputMethod !== 'desktop_web_speech') {
+      setErrorMessage(getUiStrings(sourceLang.code).errors.workflowUnavailable);
+      return;
+    }
     const recognizer = recognizerRef.current;
     if (!recognizer) {
       setErrorMessage(getUiStrings(sourceLang.code).errors.textFirstInit);
       return;
     }
-    if (selections.stage2 === 'auto' || selections.stage2 === 'chrome_nano') {
-      BuiltInTranslator.prepare(sourceLang.code, targetLang.code);
+    if (profile.translationMethod === 'chrome_translator') {
+      void BuiltInTranslator.prepare(sourceLang.code, targetLang.code).catch((error) => {
+        console.warn('[Translator] on-device model preparation failed:', error);
+      });
     }
-    recognizer.setSilenceDelay(selections.stage1 === 'webspeech_std' ? 1000 : 600);
+    const isFast = profile.endpointProfile === 'fast';
+    recognizer.setSilenceDelay(
+      isFast ? FOLLOW_ALONG_FAST_SILENCE_MS : FOLLOW_ALONG_STABLE_SILENCE_MS
+    );
+    recognizer.setMaxBufferWords(
+      isFast ? FOLLOW_ALONG_FAST_MAX_WORDS : FOLLOW_ALONG_STABLE_MAX_WORDS
+    );
     setIsConnecting(true);
     recognizer.start(sourceLang.speechCode);
   }, [
-    apiKey,
     cancelPipeline,
-    clearUnmuteTimer,
-    isAllInOnePage,
+    clearResumeTimer,
     isConnecting,
     isListening,
-    openAiApiKey,
-    selections,
-    soundFirstModelId,
+    selectedWorkflowId,
     sourceLang,
     stopWorkflow,
     targetLang,
@@ -1040,150 +1146,150 @@ export function useLikeParrotController(): LikeParrotController {
   }, []);
 
   const handlePlayCard = useCallback((card: TranslationCard) => {
-    if (isAllInOnePage && (isListening || isConnecting)) stopWorkflow();
-    if (!isAllInOnePage && isTranslating) {
-      cancelPipeline();
+    if ((card.translationStatus ?? 'complete') !== 'complete' || !card.translatedText.trim()) return;
+    if (activeProfileRef.current?.kind === 'realtime-audio' && (isListening || isConnecting)) {
+      stopWorkflow();
+    } else if (
+      activeProfileRef.current?.inputMethod !== 'desktop_web_speech'
+      && isTranslating
+    ) {
+      cancelPipeline(true);
       setIsTranslating(false);
       setStreamingTranslation('');
     }
-    clearUnmuteTimer();
+    clearResumeTimer();
+    SpeechService.stop();
+    if (activeProfileRef.current?.inputMethod === 'desktop_web_speech') {
+      recognizerRef.current?.suspendForPlayback();
+    }
     setPlayingCardId(card.id);
     setIsSpeaking(true);
-    recognizerRef.current?.setMuted(true);
     SpeechService.speak(
       card.translatedText,
       card.targetLangCode,
       () => {
         setPlayingCardId(card.id);
         setIsSpeaking(true);
-        recognizerRef.current?.setMuted(true);
       },
       () => {
         setPlayingCardId(null);
         setIsSpeaking(false);
-        scheduleRecognizerUnmute();
+        scheduleRecognizerResume();
       },
       (error) => {
-        setPlayingCardId(null);
-        setIsSpeaking(false);
         console.warn('[TTS] transcript playback failed:', error);
         setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.ttsFailed);
       }
     );
   }, [
     cancelPipeline,
-    clearUnmuteTimer,
-    isAllInOnePage,
+    clearResumeTimer,
     isConnecting,
     isListening,
     isTranslating,
-    scheduleRecognizerUnmute,
+    scheduleRecognizerResume,
     stopWorkflow,
   ]);
 
   const handleStopCard = useCallback(() => {
     SpeechService.stop();
-    clearUnmuteTimer();
+    clearResumeTimer();
     setPlayingCardId(null);
     setIsSpeaking(false);
-    scheduleRecognizerUnmute();
-  }, [clearUnmuteTimer, scheduleRecognizerUnmute]);
+    scheduleRecognizerResume();
+  }, [clearResumeTimer, scheduleRecognizerResume]);
 
   const handleDeleteCard = useCallback((id: string) => {
     if (playingCardId === id) handleStopCard();
+    const removedCard = cardsRef.current.find((card) => card.id === id);
+    if (!removedCard) return;
+    if (pendingCardIdsRef.current.has(id)) {
+      deletedPendingCardIdsRef.current.add(id);
+      activePipelineRequestsRef.current.get(id)?.abort();
+      SpeechService.cancelGroup(id);
+    }
     historyInvalidationRef.current += 1;
-    const removedCard = cards.find((card) => card.id === id);
-    setCards((previous) => previous.filter((card) => card.id !== id));
+    commitCards(cardsRef.current.filter((card) => card.id !== id));
     void deleteTranslationCard(id).catch((error) => {
       console.warn('[TranslationHistory] delete failed:', error);
-      if (removedCard) {
-        setCards((previous) => [removedCard, ...previous].sort(
-          (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
-        ).slice(0, MAX_VISIBLE_CARDS));
-      }
+      if (!pendingCardIdsRef.current.has(id)) upsertCard(removedCard);
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.deleteEntry);
     });
-  }, [cards, handleStopCard, playingCardId]);
+  }, [commitCards, handleStopCard, playingCardId, upsertCard]);
 
   const handleClearAll = useCallback(() => {
     handleStopCard();
+    const removedCards = cardsRef.current;
+    cancelPipeline(false);
+    setIsTranslating(false);
+    setStreamingTranslation('');
     historyInvalidationRef.current += 1;
-    const removedCards = cards;
-    setCards([]);
+    commitCards([]);
     void clearTranslationCards().catch((error) => {
       console.warn('[TranslationHistory] clear failed:', error);
-      setCards((previous) => [...removedCards, ...previous].filter(
+      commitCards([...removedCards, ...cardsRef.current].filter(
         (card, index, all) => all.findIndex((candidate) => candidate.id === card.id) === index
-      ).sort(
-        (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
-      ).slice(0, MAX_VISIBLE_CARDS));
+      ));
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.clearHistory);
     });
-  }, [cards, handleStopCard]);
+  }, [cancelPipeline, commitCards, handleStopCard]);
 
-  const listeningOrConnecting = isListening || isConnecting;
   const handleDismissError = useCallback(() => setErrorMessage(null), []);
-
   const handleOpenSettings = useCallback(() => {
     stopWorkflow();
     setIsSettingsOpen(true);
   }, [stopWorkflow]);
-
-  const handleCloseSettings = useCallback(() => {
-    setIsSettingsOpen(false);
-  }, []);
+  const handleCloseSettings = useCallback(() => setIsSettingsOpen(false), []);
 
   const view = useMemo(() => ({
-      isSoundFirstPage: isAllInOnePage,
-      isBillingPlanPage,
-      currentPath,
-      errorMessage,
-      soundFirstLatencyMs,
-  }), [currentPath, errorMessage, isAllInOnePage, isBillingPlanPage, soundFirstLatencyMs]);
-
+    isBillingPlanPage,
+    currentPath,
+    errorMessage,
+  }), [currentPath, errorMessage, isBillingPlanPage]);
   const activity = useMemo(() => ({
-      isListening,
-      isConnecting,
-      isSpeaking,
+    isListening,
+    isConnecting,
+    isSpeaking,
   }), [isConnecting, isListening, isSpeaking]);
-
   const languages = useMemo(() => ({
-      source: sourceLang,
-      target: targetLang,
-      changeSource: handleSourceLangChange,
-      changeTarget: handleTargetLangChange,
+    source: sourceLang,
+    target: targetLang,
+    changeSource: handleSourceLangChange,
+    changeTarget: handleTargetLangChange,
   }), [handleSourceLangChange, handleTargetLangChange, sourceLang, targetLang]);
-
-  const pipeline = useMemo(() => ({
-      status: pipelineStatus,
-      selections,
-      changeSelections: handleSelectionChange,
-      isListeningOrConnecting: listeningOrConnecting,
-  }), [handleSelectionChange, listeningOrConnecting, pipelineStatus, selections]);
-
-  const soundFirst = useMemo(() => {
-    const selectedModel = getSoundFirstModel(soundFirstModelId);
-    const isSelectedModelConfigured = selectedModel.provider === 'openai'
-      ? Boolean(openAiApiKey.trim())
-      : Boolean(apiKey.trim());
-    return {
-      selectedModelId: soundFirstModelId,
-      isSelectedModelConfigured,
-      models: SOUND_FIRST_MODELS,
-      changeModel: handleSoundFirstModelChange,
-    };
-  }, [apiKey, handleSoundFirstModelChange, openAiApiKey, soundFirstModelId]);
-
+  const workflow = useMemo(() => ({
+    profiles: WORKFLOW_PROFILES,
+    selectedId: selectedWorkflowId,
+    availability: workflowAvailability,
+    resolvedProfileId,
+    activeProfile,
+    isSelectedAvailable,
+    isMobileDictation: activeProfile?.inputMethod === 'mobile_keyboard' ||
+      (selectedWorkflowId === 'auto' && platformCapabilities.isMobile),
+    lastLatencyMs,
+    change: handleWorkflowChange,
+    submitText: (text: string) => queueSourceTranslation(text, 'keyboard_text'),
+  }), [
+    activeProfile,
+    handleWorkflowChange,
+    isSelectedAvailable,
+    lastLatencyMs,
+    platformCapabilities.isMobile,
+    queueSourceTranslation,
+    resolvedProfileId,
+    selectedWorkflowId,
+    workflowAvailability,
+  ]);
   const transcript = useMemo(() => ({
-      cards,
-      playingCardId,
-      interimText,
-      isTranslating,
-      streamingTranslation,
-      play: handlePlayCard,
-      stop: handleStopCard,
-      delete: handleDeleteCard,
-      clear: handleClearAll,
+    cards,
+    playingCardId,
+    interimText,
+    isTranslating,
+    streamingTranslation,
+    play: handlePlayCard,
+    stop: handleStopCard,
+    delete: handleDeleteCard,
+    clear: handleClearAll,
   }), [
     cards,
     handleClearAll,
@@ -1195,25 +1301,28 @@ export function useLikeParrotController(): LikeParrotController {
     playingCardId,
     streamingTranslation,
   ]);
-
   const settings = useMemo(() => ({
-      isOpen: isSettingsOpen,
-      geminiApiKey: apiKey,
-      rememberGeminiApiKey: rememberApiKey,
-      openAiApiKey,
-      rememberOpenAiApiKey,
-      azureApiKey,
-      azureRegion,
-      rememberAzureApiKey,
-      theme,
-      close: handleCloseSettings,
-      saveApiKey: handleSaveApiKey,
-      deleteApiKey: handleDeleteApiKey,
-      changeTheme: handleThemeChange,
-  }), [
-    apiKey,
+    isOpen: isSettingsOpen,
+    geminiApiKey: apiKey,
+    rememberGeminiApiKey: rememberApiKey,
+    openAiApiKey,
+    rememberOpenAiApiKey,
     azureApiKey,
     azureRegion,
+    rememberAzureApiKey,
+    automaticRoutingPreference,
+    theme,
+    close: handleCloseSettings,
+    saveApiKey: handleSaveApiKey,
+    deleteApiKey: handleDeleteApiKey,
+    changeAutomaticRoutingPreference: handleAutomaticRoutingPreferenceChange,
+    changeTheme: handleThemeChange,
+  }), [
+    apiKey,
+    automaticRoutingPreference,
+    azureApiKey,
+    azureRegion,
+    handleAutomaticRoutingPreferenceChange,
     handleCloseSettings,
     handleDeleteApiKey,
     handleSaveApiKey,
@@ -1225,13 +1334,12 @@ export function useLikeParrotController(): LikeParrotController {
     rememberOpenAiApiKey,
     theme,
   ]);
-
   const actions = useMemo(() => ({
-      dismissError: handleDismissError,
-      openSettings: handleOpenSettings,
-      saveTranscript: handleSaveTranscript,
-      navigate: handleNavigate,
-      toggleListening: handleToggleListening,
+    dismissError: handleDismissError,
+    openSettings: handleOpenSettings,
+    saveTranscript: handleSaveTranscript,
+    navigate: handleNavigate,
+    toggleListening: handleToggleListening,
   }), [
     handleDismissError,
     handleNavigate,
@@ -1244,10 +1352,9 @@ export function useLikeParrotController(): LikeParrotController {
     view,
     activity,
     languages,
-    pipeline,
-    soundFirst,
+    workflow,
     transcript,
     settings,
     actions,
-  }), [actions, activity, languages, pipeline, settings, soundFirst, transcript, view]);
+  }), [actions, activity, languages, settings, transcript, view, workflow]);
 }

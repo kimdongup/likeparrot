@@ -92,6 +92,15 @@ export interface UiStrings {
     geminiApi: string;
     openAiApi: string;
     azureApi: string;
+    automaticRouting: string;
+    automaticRoutingDescription: string;
+    onDeviceFirst: string;
+    onDeviceFirstDescription: string;
+    allowCloudFallback: string;
+    allowCloudFallbackDescription: string;
+    preferredCloudProvider: string;
+    providerUnavailable: string;
+    cloudFallbackPrivacyNotice: string;
     selectSection: string;
     languages: string;
     languageHint: string;
@@ -155,6 +164,10 @@ export interface UiStrings {
     showDetails: string;
     hideDetails: string;
     sourceUnavailable: string;
+    translationPending: string;
+    translationFailed: string;
+    translationInterrupted: string;
+    translationActionsUnavailable: string;
     stopSpeech: string;
     readAloud: string;
     copyTranslation: string;
@@ -185,6 +198,8 @@ export interface UiStrings {
     loadTranscript: string;
     speechTooFast: string;
     savePipeline: string;
+    saveWorkflow: string;
+    workflowUnavailable: string;
     saveTheme: string;
     deleteEntry: string;
     clearHistory: string;

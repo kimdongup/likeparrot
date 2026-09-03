@@ -1,4 +1,4 @@
-import type { TranslationCard } from '../types';
+import type { TranslationCard, TranslationStatus } from '../types';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { normalizePipelineTag } from './pipelinePresentation';
 
@@ -8,9 +8,21 @@ const STORE_NAME = 'translation_cards';
 const MAX_SAVED_CARDS = 500;
 let mutationQueue: Promise<void> = Promise.resolve();
 
-interface StoredTranslationCard extends Omit<TranslationCard, 'timestamp'> {
+interface StoredTranslationCard extends Omit<TranslationCard, 'timestamp' | 'translationStatus'> {
   timestamp: number;
+  // Kept unknown so malformed or legacy IndexedDB data is normalized safely.
+  translationStatus?: unknown;
 }
+
+const normalizeStoredStatus = (
+  status: unknown
+): { status: TranslationStatus; wasInterrupted: boolean } => {
+  if (status === 'pending') return { status: 'failed', wasInterrupted: true };
+  if (status === 'failed') return { status, wasInterrupted: false };
+  // Records saved before status tracking (and malformed status values) already
+  // represent completed translations in the legacy schema.
+  return { status: 'complete', wasInterrupted: false };
+};
 
 const openDatabase = (): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
@@ -56,14 +68,25 @@ export const loadTranslationCards = async (): Promise<TranslationCard[]> => {
       request.onerror = () => reject(request.error ?? new Error('Failed to load translation history'));
     });
     return records
-      .map((record) => ({
-        ...record,
-        sourceLangCode: record.sourceLangCode ?? SUPPORTED_LANGUAGES.find(
-          (language) => language.nativeName === record.sourceLang
-        )?.code ?? 'ko',
-        pipelineTag: normalizePipelineTag(record.pipelineTag),
-        timestamp: new Date(record.timestamp),
-      }))
+      .map((record): TranslationCard => {
+        const normalizedStatus = normalizeStoredStatus(record.translationStatus);
+        return {
+          ...record,
+          sourceLangCode: record.sourceLangCode ?? SUPPORTED_LANGUAGES.find(
+            (language) => language.nativeName === record.sourceLang
+          )?.code ?? 'ko',
+          pipelineTag: normalizePipelineTag(record.pipelineTag),
+          timestamp: new Date(record.timestamp),
+          translationStatus: normalizedStatus.status,
+          translationFailureReason: normalizedStatus.wasInterrupted
+            ? 'interrupted'
+            : record.translationFailureReason,
+          translationFailureDetail: normalizedStatus.wasInterrupted
+            ? undefined
+            : record.translationFailureDetail,
+          isPlaying: false,
+        };
+      })
       .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime());
   } finally {
     database.close();

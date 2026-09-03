@@ -15,6 +15,12 @@ export interface ApiKeyReadResult {
 }
 
 export type ApiKeyProvider = 'gemini' | 'openai' | 'azure';
+export type CloudTranslationProvider = Extract<ApiKeyProvider, 'gemini' | 'azure'>;
+
+export interface AutomaticRoutingPreference {
+  allowCloudFallback: boolean;
+  preferredCloudProvider: CloudTranslationProvider;
+}
 
 /** Keep the original Gemini key name so existing installs migrate without work. */
 export const GEMINI_API_KEY_STORAGE_KEY = 'likeparrot_api_key';
@@ -23,6 +29,9 @@ export const AZURE_API_KEY_STORAGE_KEY = 'likeparrot_azure_api_key';
 export const AZURE_REGION_STORAGE_KEY = 'likeparrot_azure_region';
 export const API_KEY_STORAGE_KEY = GEMINI_API_KEY_STORAGE_KEY;
 export const THEME_STORAGE_KEY = 'likeparrot_theme';
+export const WORKFLOW_PROFILE_STORAGE_KEY = 'likeparrot_workflow_profile';
+export const AUTO_CLOUD_FALLBACK_STORAGE_KEY = 'likeparrot_auto_cloud_fallback';
+export const PREFERRED_CLOUD_PROVIDER_STORAGE_KEY = 'likeparrot_preferred_cloud_provider';
 
 const getApiKeyStorageKey = (provider: ApiKeyProvider): string => {
   if (provider === 'openai') return OPENAI_API_KEY_STORAGE_KEY;
@@ -210,6 +219,60 @@ export const readStoredTheme = (): ThemePreference => {
 export const saveStoredTheme = (theme: ThemePreference): boolean => {
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Automatic routing never sends a transcript to a paid/network service unless
+ * the user has explicitly enabled that behavior. Explicit workflow profiles
+ * are independent of this preference.
+ */
+export const readAutomaticRoutingPreference = (): AutomaticRoutingPreference => {
+  try {
+    return {
+      allowCloudFallback: window.localStorage.getItem(AUTO_CLOUD_FALLBACK_STORAGE_KEY) === 'true',
+      preferredCloudProvider:
+        window.localStorage.getItem(PREFERRED_CLOUD_PROVIDER_STORAGE_KEY) === 'azure'
+          ? 'azure'
+          : 'gemini',
+    };
+  } catch {
+    return { allowCloudFallback: false, preferredCloudProvider: 'gemini' };
+  }
+};
+
+export const saveAutomaticRoutingPreference = (
+  preference: AutomaticRoutingPreference
+): boolean => {
+  try {
+    window.localStorage.setItem(
+      AUTO_CLOUD_FALLBACK_STORAGE_KEY,
+      String(preference.allowCloudFallback)
+    );
+    window.localStorage.setItem(
+      PREFERRED_CLOUD_PROVIDER_STORAGE_KEY,
+      preference.preferredCloudProvider
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const readStoredWorkflowProfileId = (): string => {
+  try {
+    return window.localStorage.getItem(WORKFLOW_PROFILE_STORAGE_KEY)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+};
+
+export const saveStoredWorkflowProfileId = (profileId: string): boolean => {
+  try {
+    window.localStorage.setItem(WORKFLOW_PROFILE_STORAGE_KEY, profileId);
     return true;
   } catch {
     return false;

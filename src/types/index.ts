@@ -1,9 +1,27 @@
+export type TranslationStatus = 'pending' | 'complete' | 'failed';
+
+export type TranslationFailureReason =
+  | 'interrupted'
+  | 'translation_failed'
+  | 'cancelled';
+
+export type TranscriptInputMethod =
+  | 'desktop_web_speech'
+  | 'keyboard_text'
+  | 'live_audio';
+
 export interface TranslationCard {
   id: string;
   timestamp: Date;
   sourceText: string;
   sourceTextUnavailable?: boolean;
   translatedText: string;
+  /** Missing on records created before source-first persistence was added. */
+  translationStatus?: TranslationStatus;
+  translationFailureReason?: TranslationFailureReason;
+  translationFailureDetail?: string;
+  inputMethod?: TranscriptInputMethod;
+  workflowId?: string;
   sourceLang: string;
   sourceLangCode?: string;
   targetLang: string;

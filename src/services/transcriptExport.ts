@@ -86,6 +86,7 @@ const renderEntry = (
   const sourceLanguageCode = safeLanguageCode(card.sourceLangCode);
   const targetLanguageCode = safeLanguageCode(card.targetLangCode);
   const sourceTranscriptUnavailable = card.sourceTextUnavailable ||
+    !card.sourceText.trim() ||
     card.sourceText === '(Source transcript unavailable)' ||
     card.sourceText === '(원문 전사 없음)';
   const sourceTextLanguage = sourceTranscriptUnavailable
@@ -104,20 +105,41 @@ const renderEntry = (
   const pipeline = pipelineTag
     ? `<span class="pipeline">${escapeHtml(pipelineTag)}</span>`
     : '';
-
-  return `
-        <li>
-          <article class="entry" data-expanded="false">
-            <button class="entry__source" type="button" data-action="toggle" aria-expanded="false" aria-label="${escapeHtml(strings.transcript.showDetails)}">
-              <span class="prompt" aria-hidden="true">${sequence} &lt;</span>
-              <span lang="${sourceTextLanguage}">${escapeHtml(sourceText)}</span>
-            </button>
-            <button class="entry__translation" type="button" data-action="speak">
+  const translationStatus = card.translationStatus ?? 'complete';
+  const hasCompletedTranslation = translationStatus === 'complete' &&
+    card.translatedText.trim().length > 0;
+  const translationStateText = translationStatus === 'pending'
+    ? strings.transcript.translationPending
+    : translationStatus === 'failed' && card.translationFailureReason === 'interrupted'
+      ? strings.transcript.translationInterrupted
+      : strings.transcript.translationFailed;
+  const translation = hasCompletedTranslation
+    ? `<button class="entry__translation" type="button" data-action="speak">
               <span class="prompt prompt--translation" aria-hidden="true">&gt;</span>
               <span class="sr-only" lang="${safeLanguageCode(strings.locale)}">${escapeHtml(strings.transcript.readAloud)}: </span>
               <span data-translation lang="${targetLanguageCode}">${escapeHtml(card.translatedText)}</span>
               <span class="speaking-mark" aria-hidden="true">◉</span>
+            </button>`
+    : `<div class="entry__translation entry__translation--${translationStatus === 'pending' ? 'pending' : 'failed'}" role="status">
+              <span class="prompt prompt--translation" aria-hidden="true">&gt;</span>
+              <span lang="${safeLanguageCode(strings.locale)}">${escapeHtml(translationStateText)}</span>
+            </div>`;
+  const actions = hasCompletedTranslation
+    ? `<div class="actions" lang="${safeLanguageCode(strings.locale)}">
+                <button type="button" data-action="speak" aria-label="${escapeHtml(strings.transcript.readAloud)}">${escapeHtml(strings.transcript.read)}</button>
+                <button type="button" data-action="stop" aria-label="${escapeHtml(strings.transcript.stopSpeech)}">${escapeHtml(strings.transcript.stop)}</button>
+                <button type="button" data-action="copy" aria-label="${escapeHtml(strings.transcript.copyTranslation)}">${escapeHtml(strings.transcript.copy)}</button>
+              </div>`
+    : '';
+
+  return `
+        <li>
+          <article class="entry" data-expanded="false" data-translation-ready="${String(hasCompletedTranslation)}">
+            <button class="entry__source" type="button" data-action="toggle" aria-expanded="false" aria-label="${escapeHtml(strings.transcript.showDetails)}">
+              <span class="prompt" aria-hidden="true">${sequence} &lt;</span>
+              <span lang="${sourceTextLanguage}">${escapeHtml(sourceText)}</span>
             </button>
+            ${translation}
             <div class="entry__details">
               <div class="metadata">
                 <span>${escapeHtml(sourceLanguageName)} → ${escapeHtml(targetLanguageName)}</span>
@@ -125,11 +147,7 @@ const renderEntry = (
                 ${pipeline}
                 ${latency}
               </div>
-              <div class="actions" lang="${safeLanguageCode(strings.locale)}">
-                <button type="button" data-action="speak" aria-label="${escapeHtml(strings.transcript.readAloud)}">${escapeHtml(strings.transcript.read)}</button>
-                <button type="button" data-action="stop" aria-label="${escapeHtml(strings.transcript.stopSpeech)}">${escapeHtml(strings.transcript.stop)}</button>
-                <button type="button" data-action="copy" aria-label="${escapeHtml(strings.transcript.copyTranslation)}">${escapeHtml(strings.transcript.copy)}</button>
-              </div>
+              ${actions}
             </div>
           </article>
         </li>`;
@@ -174,6 +192,8 @@ export function buildTranscriptHtml(
       --hover: #f1f5f9;
       --accent: #4f46e5;
       --playing: #059669;
+      --pending: #b45309;
+      --failed: #be123c;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
     @media (prefers-color-scheme: dark) {
@@ -186,6 +206,8 @@ export function buildTranscriptHtml(
         --hover: #0f172a;
         --accent: #818cf8;
         --playing: #34d399;
+        --pending: #fcd34d;
+        --failed: #fda4af;
       }
     }
     * { box-sizing: border-box; }
@@ -223,6 +245,9 @@ export function buildTranscriptHtml(
     }
     .entry__source { color: var(--muted); font-size: .82rem; }
     .entry__translation { margin-top: .15rem; color: var(--fg); font-size: 1rem; font-weight: 700; }
+    .entry__translation--pending, .entry__translation--failed { cursor: default; }
+    .entry__translation--pending { color: var(--pending); }
+    .entry__translation--failed { color: var(--failed); }
     .prompt { padding-right: .75rem; color: var(--faint); text-align: right; user-select: none; }
     .prompt--translation { color: var(--accent); }
     .speaking-mark { display: none; margin-left: .6rem; color: var(--playing); }
@@ -341,6 +366,7 @@ export function buildTranscriptHtml(
       };
 
       const speak = (entry) => {
+        if (entry.dataset.translationReady !== 'true') return;
         const translation = entry.querySelector('[data-translation]');
         const text = translation ? translation.textContent.trim() : '';
         if (!text || !('speechSynthesis' in window)) {
@@ -395,6 +421,7 @@ export function buildTranscriptHtml(
       };
 
       const copy = async (entry) => {
+        if (entry.dataset.translationReady !== 'true') return;
         const translation = entry.querySelector('[data-translation]');
         const text = translation ? translation.textContent : '';
         try {

@@ -106,6 +106,10 @@ export class TranslationService {
     const shouldTryBrowser = targetEngine === 'auto' || targetEngine === 'chrome_nano';
     const shouldTryGemini = targetEngine === 'auto' || targetEngine === 'gemini_stream';
     const shouldTryAzure = targetEngine === 'auto' || targetEngine === 'turbo_fastpath';
+    const cleanKey = apiKey?.trim() ?? '';
+    const azureKey = azureCredentials?.apiKey.trim() ?? '';
+    const hasConfiguredNetworkAlternative = targetEngine === 'auto'
+      && (Boolean(cleanKey) || Boolean(azureKey));
 
     if (shouldTryBrowser) {
       if (BuiltInTranslator.isBrowserTranslatorSupported()) {
@@ -115,7 +119,7 @@ export class TranslationService {
             sourceCode,
             targetCode,
             signal,
-            targetEngine === 'chrome_nano'
+            targetEngine === 'chrome_nano' || !hasConfiguredNetworkAlternative
           );
           if (result) {
             const latencyMs = Math.round(performance.now() - startTime);
@@ -142,7 +146,6 @@ export class TranslationService {
     }
 
     if (shouldTryGemini) {
-      const cleanKey = apiKey?.trim() ?? '';
       if (!cleanKey && targetEngine === 'gemini_stream') {
         throw new TranslationError('Gemini translation requires an API key.');
       }
@@ -175,7 +178,6 @@ export class TranslationService {
     }
 
     if (shouldTryAzure) {
-      const azureKey = azureCredentials?.apiKey.trim() ?? '';
       if (!azureKey && targetEngine === 'turbo_fastpath') {
         throw new TranslationError('Azure Translator requires an API key.');
       }

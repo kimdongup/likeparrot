@@ -1,5 +1,5 @@
 {
-  "name": "LikeParrot - Audio First · Text First",
+  "name": "LikeParrot - Speech Translation Workflows",
   "short_name": "LikeParrot",
   "description": "A fast PWA that translates speech, plays it in the target language, and saves a readable transcript.",
   "id": "/",
