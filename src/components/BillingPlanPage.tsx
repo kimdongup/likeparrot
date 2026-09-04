@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowUpRight,
   BadgeDollarSign,
   Check,
@@ -13,6 +14,7 @@ import {
   TriangleAlert,
   WalletCards,
 } from 'lucide-react';
+import { getUiStrings } from '../constants/translations';
 import {
   BILLING_LOCALE_TAGS,
   PRICING_LAST_VERIFIED,
@@ -25,6 +27,7 @@ import { CostCalculator } from './CostCalculator';
 
 interface BillingPlanPageProps {
   uiLanguageCode: string;
+  onBackToHome?: () => void;
 }
 
 const COPY = {
@@ -1115,13 +1118,24 @@ function DetailBlock({
   );
 }
 
-export function BillingPlanPage({ uiLanguageCode }: BillingPlanPageProps) {
+export function BillingPlanPage({ uiLanguageCode, onBackToHome }: BillingPlanPageProps) {
   const locale = resolveBillingLocale(uiLanguageCode);
   const t = COPY[locale];
+  const homeLabel = getUiStrings(uiLanguageCode).header.backToHome;
 
   return (
     <div lang={BILLING_LOCALE_TAGS[locale]} className="w-full space-y-5 pb-[max(1rem,env(safe-area-inset-bottom))] sm:space-y-7">
       <header className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-5 sm:px-6 sm:py-7">
+        {onBackToHome && (
+          <button
+            type="button"
+            onClick={onBackToHome}
+            className="mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--app-border)] px-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-slate-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {homeLabel}
+          </button>
+        )}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-400">{t.pageEyebrow}</p>

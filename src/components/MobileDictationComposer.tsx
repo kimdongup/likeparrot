@@ -12,7 +12,7 @@ import type {
   FormEvent,
   KeyboardEvent,
 } from 'react';
-import { Keyboard, Send, X } from 'lucide-react';
+import { Keyboard, Mic, Send, X } from 'lucide-react';
 
 export interface MobileDictationComposerCopy {
   title: string;
@@ -27,6 +27,7 @@ export interface MobileDictationComposerCopy {
   characterCountLabel: string;
   emptyError: string;
   submitError: string;
+  openKeyboardMic: string;
 }
 
 export interface MobileDictationComposerProps {
@@ -59,6 +60,7 @@ const DEFAULT_COPY: MobileDictationComposerCopy = {
   characterCountLabel: 'characters',
   emptyError: 'Enter or dictate some text first.',
   submitError: 'The text could not be submitted. Your source text is still here.',
+  openKeyboardMic: 'Open the phone keyboard microphone',
 };
 
 export const MobileDictationComposer = memo(function MobileDictationComposer({
@@ -172,6 +174,21 @@ export const MobileDictationComposer = memo(function MobileDictationComposer({
     textareaRef.current?.focus();
   };
 
+  const openKeyboardMic = () => {
+    const field = textareaRef.current;
+    if (!field || disabled || isBusy) return;
+    field.focus();
+    try {
+      field.setSelectionRange(field.value.length, field.value.length);
+    } catch {
+      /* some mobile browsers reject selection on unready inputs */
+    }
+    const virtualKeyboard = (
+      navigator as Navigator & { virtualKeyboard?: { show?: () => void } }
+    ).virtualKeyboard;
+    virtualKeyboard?.show?.();
+  };
+
   const describedBy = [
     instructionsId,
     languageHintId,
@@ -206,28 +223,42 @@ export const MobileDictationComposer = memo(function MobileDictationComposer({
       <p id={languageHintId} className="mt-1 text-[11px] leading-4 text-[var(--app-muted)]">
         {copy.languageHintPrefix}{sourceLanguageName ? ` ${sourceLanguageName}` : ''}.
       </p>
-      <textarea
-        ref={textareaRef}
-        id={inputId}
-        lang={sourceLanguageCode}
-        value={currentValue}
-        onChange={handleChange}
-        onCompositionStart={() => setIsComposing(true)}
-        onCompositionEnd={handleCompositionEnd}
-        onKeyDown={handleKeyDown}
-        disabled={disabled || isBusy}
-        maxLength={maxLength}
-        rows={4}
-        inputMode="text"
-        enterKeyHint="done"
-        autoCapitalize="sentences"
-        autoCorrect="on"
-        spellCheck
-        placeholder={copy.placeholder}
-        aria-describedby={describedBy}
-        aria-invalid={Boolean(localError)}
-        className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-3 text-base leading-6 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60"
-      />
+      <div className="relative mt-2">
+        <textarea
+          ref={textareaRef}
+          id={inputId}
+          lang={sourceLanguageCode}
+          value={currentValue}
+          onChange={handleChange}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={handleCompositionEnd}
+          onKeyDown={handleKeyDown}
+          disabled={disabled || isBusy}
+          maxLength={maxLength}
+          rows={4}
+          inputMode="text"
+          enterKeyHint="done"
+          autoCapitalize="sentences"
+          autoCorrect="on"
+          spellCheck
+          placeholder={copy.placeholder}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(localError)}
+          className="min-h-28 w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-3 pr-14 text-base leading-6 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <label
+          htmlFor={inputId}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            openKeyboardMic();
+          }}
+          className="absolute bottom-2.5 right-2.5 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 transition active:scale-95"
+          aria-label={copy.openKeyboardMic}
+          title={copy.openKeyboardMic}
+        >
+          <Mic className="h-5 w-5" aria-hidden="true" />
+        </label>
+      </div>
 
       <div className="mt-1.5 flex min-w-0 items-start justify-between gap-3 text-[10px] leading-4 text-[var(--app-muted)]">
         <span id={shortcutId} className="min-w-0">{copy.shortcutHint}</span>

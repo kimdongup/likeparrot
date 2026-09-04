@@ -32,6 +32,12 @@ export interface UiStrings {
     openSettings: string;
     openSettingsNeedsKey: string;
     settingsTitle: string;
+    openWorkflow: string;
+    openWorkflowTitle: string;
+    closeWorkflow: string;
+    backToHome: string;
+    expandSidebar: string;
+    collapseSidebar: string;
   };
   controls: {
     ariaLabel: string;
@@ -93,6 +99,10 @@ export interface UiStrings {
     geminiApi: string;
     openAiApi: string;
     azureApi: string;
+    apiKeys: string;
+    apiKeysDescription: string;
+    getKeyHelp: string;
+    helpWindowBlocked: string;
     automaticRouting: string;
     automaticRoutingDescription: string;
     onDeviceFirst: string;
@@ -153,7 +163,6 @@ export interface UiStrings {
     sessionKeyWarning: string;
     publicDeploymentWarning: string;
     rememberKey: string;
-    personalDeviceOnly: string;
     saveKey: string;
     deleteKey: string;
     appearance: string;

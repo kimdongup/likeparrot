@@ -22,6 +22,12 @@ interface LocalePack {
     | 'availableLabel'
     | 'unavailableLabel'
     | 'selectedLabel'
+    | 'showFlowLabel'
+    | 'hideFlowLabel'
+    | 'closeLabel'
+    | 'useAutomaticLabel'
+    | 'usingAutomaticLabel'
+    | 'automaticBadge'
     | 'locationLabels'
   >;
   composer: MobileDictationComposerCopy;
@@ -127,6 +133,8 @@ const EN: LocalePack = {
     groupLabels: { automatic: 'Automatic', 'live-audio': 'Live audio', desktop: 'Desktop text workflows', mobile: 'Mobile keyboard workflows' },
     activeFlowTitle: 'Active flow', automaticResolvedPrefix: 'Automatic selected', requirementsLabel: 'Requirements',
     availableLabel: 'Available', unavailableLabel: 'Unavailable', selectedLabel: 'Selected',
+    showFlowLabel: 'Show full flow', hideFlowLabel: 'Hide full flow', closeLabel: 'Close workflow menu',
+    useAutomaticLabel: 'Use automatic routing', usingAutomaticLabel: 'Automatic routing is on', automaticBadge: 'Auto',
     locationLabels: { device: 'Device', browser: 'Browser', network: 'Network', storage: 'Saved locally' },
   },
   composer: {
@@ -136,6 +144,7 @@ const EN: LocalePack = {
     submit: 'Translate and speak', submitting: 'Translating…', clear: 'Clear',
     shortcutHint: 'On a hardware keyboard, press Ctrl/Command + Enter to submit.', characterCountLabel: 'characters',
     emptyError: 'Enter or dictate some text first.', submitError: 'The text could not be submitted. Your source text is still here.',
+    openKeyboardMic: 'Open the phone keyboard microphone',
   },
   terms: {
     automaticLabel: 'Automatic routing (smart fallback)', automaticDescription: 'Choose a complete workflow from device capabilities, saved credentials, and the cloud-fallback setting.',
@@ -210,6 +219,8 @@ const KO: LocalePack = {
     groupLabels: { automatic: '자동', 'live-audio': '실시간 오디오', desktop: '데스크탑 텍스트 워크플로', mobile: '모바일 키보드 워크플로' },
     activeFlowTitle: '현재 실행 흐름', automaticResolvedPrefix: '자동 선택 결과', requirementsLabel: '필요 조건',
     availableLabel: '사용 가능', unavailableLabel: '사용 불가', selectedLabel: '선택됨',
+    showFlowLabel: '실행 흐름 보기', hideFlowLabel: '실행 흐름 닫기', closeLabel: '워크플로 닫기',
+    useAutomaticLabel: '자동 경로로', usingAutomaticLabel: '자동 경로가 적용 중입니다', automaticBadge: '자동',
     locationLabels: { device: '기기', browser: '브라우저', network: '네트워크', storage: '기기에 저장' },
   },
   composer: {
@@ -219,6 +230,7 @@ const KO: LocalePack = {
     submit: '번역하고 읽기', submitting: '번역 중…', clear: '지우기',
     shortcutHint: '하드웨어 키보드에서는 Ctrl/Command + Enter로 전송합니다.', characterCountLabel: '자',
     emptyError: '먼저 내용을 입력하거나 받아쓰기 하세요.', submitError: '텍스트를 전송하지 못했습니다. 원문은 입력칸에 그대로 남아 있습니다.',
+    openKeyboardMic: '휴대전화 키보드 마이크 열기',
   },
   terms: {
     automaticLabel: '자동 경로 선택(스마트 대체)', automaticDescription: '기기 기능, 저장된 API 키, 클라우드 대체 설정에 맞는 완전한 워크플로를 선택합니다.',
@@ -292,6 +304,8 @@ const JA: LocalePack = {
     groupLabels: { automatic: '自動', 'live-audio': 'ライブ音声', desktop: 'デスクトップのテキストワークフロー', mobile: 'モバイルキーボードのワークフロー' },
     activeFlowTitle: '現在の処理フロー', automaticResolvedPrefix: '自動選択', requirementsLabel: '必要条件',
     availableLabel: '利用可能', unavailableLabel: '利用不可', selectedLabel: '選択中',
+    showFlowLabel: '処理フローを表示', hideFlowLabel: '処理フローを閉じる', closeLabel: 'ワークフローを閉じる',
+    useAutomaticLabel: '自動経路を使う', usingAutomaticLabel: '自動経路が適用されています', automaticBadge: '自動',
     locationLabels: { device: '端末', browser: 'ブラウザ', network: 'ネットワーク', storage: '端末内に保存' },
   },
   composer: {
@@ -301,6 +315,7 @@ const JA: LocalePack = {
     submit: '翻訳して読み上げ', submitting: '翻訳中…', clear: '消去',
     shortcutHint: 'ハードウェアキーボードでは Ctrl/Command + Enter で送信します。', characterCountLabel: '文字',
     emptyError: '先にテキストを入力または音声入力してください。', submitError: 'テキストを送信できませんでした。原文は入力欄に残っています。',
+    openKeyboardMic: 'スマホのキーボードマイクを開く',
   },
   terms: {
     automaticLabel: '自動ルーティング（スマート代替）', automaticDescription: '端末機能、保存済み API キー、クラウド代替設定から完全なワークフローを選びます。',
@@ -374,6 +389,8 @@ const ZH_TW: LocalePack = {
     groupLabels: { automatic: '自動', 'live-audio': '即時音訊', desktop: '桌面文字工作流程', mobile: '行動鍵盤工作流程' },
     activeFlowTitle: '目前流程', automaticResolvedPrefix: '自動選擇結果', requirementsLabel: '需求',
     availableLabel: '可用', unavailableLabel: '無法使用', selectedLabel: '已選取',
+    showFlowLabel: '顯示完整流程', hideFlowLabel: '隱藏完整流程', closeLabel: '關閉工作流程選單',
+    useAutomaticLabel: '改用自動路徑', usingAutomaticLabel: '目前使用自動路徑', automaticBadge: '自動',
     locationLabels: { device: '裝置', browser: '瀏覽器', network: '網路', storage: '儲存在本機' },
   },
   composer: {
@@ -383,6 +400,7 @@ const ZH_TW: LocalePack = {
     submit: '翻譯並朗讀', submitting: '翻譯中…', clear: '清除',
     shortcutHint: '使用實體鍵盤時，按 Ctrl/Command + Enter 送出。', characterCountLabel: '個字元',
     emptyError: '請先輸入文字或使用語音輸入。', submitError: '無法送出文字，原文仍保留在輸入欄中。',
+    openKeyboardMic: '開啟手機鍵盤麥克風',
   },
   terms: {
     automaticLabel: '自動路由（智慧備援）', automaticDescription: '依裝置功能、已儲存的 API 金鑰與雲端備援設定選擇完整工作流程。',
@@ -455,6 +473,8 @@ const ZH: LocalePack = {
     groupLabels: { automatic: '自动', 'live-audio': '实时音频', desktop: '桌面文本工作流程', mobile: '移动键盘工作流程' },
     activeFlowTitle: '当前流程', automaticResolvedPrefix: '自动选择结果', requirementsLabel: '要求',
     availableLabel: '可用', unavailableLabel: '不可用', selectedLabel: '已选择',
+    showFlowLabel: '显示完整流程', hideFlowLabel: '隐藏完整流程', closeLabel: '关闭工作流程菜单',
+    useAutomaticLabel: '改用自动路径', usingAutomaticLabel: '当前使用自动路径', automaticBadge: '自动',
     locationLabels: { device: '设备', browser: '浏览器', network: '网络', storage: '保存在本机' },
   },
   composer: {
@@ -464,6 +484,7 @@ const ZH: LocalePack = {
     submit: '翻译并朗读', submitting: '翻译中…', clear: '清除',
     shortcutHint: '使用实体键盘时，按 Ctrl/Command + Enter 提交。', characterCountLabel: '个字符',
     emptyError: '请先输入文本或使用语音输入。', submitError: '无法提交文本，原文仍保留在输入框中。',
+    openKeyboardMic: '打开手机键盘麦克风',
   },
   terms: {
     ...ZH_TW.terms,
@@ -536,6 +557,8 @@ const ES: LocalePack = {
     groupLabels: { automatic: 'Automático', 'live-audio': 'Audio en directo', desktop: 'Flujos de texto para escritorio', mobile: 'Flujos con teclado móvil' },
     activeFlowTitle: 'Flujo activo', automaticResolvedPrefix: 'Selección automática', requirementsLabel: 'Requisitos',
     availableLabel: 'Disponible', unavailableLabel: 'No disponible', selectedLabel: 'Seleccionado',
+    showFlowLabel: 'Mostrar flujo completo', hideFlowLabel: 'Ocultar flujo completo', closeLabel: 'Cerrar menú de flujo',
+    useAutomaticLabel: 'Usar ruta automática', usingAutomaticLabel: 'La ruta automática está activa', automaticBadge: 'Auto',
     locationLabels: { device: 'Dispositivo', browser: 'Navegador', network: 'Red', storage: 'Guardado localmente' },
   },
   composer: {
@@ -545,6 +568,7 @@ const ES: LocalePack = {
     submit: 'Traducir y leer', submitting: 'Traduciendo…', clear: 'Borrar',
     shortcutHint: 'Con un teclado físico, pulsa Ctrl/Command + Enter para enviar.', characterCountLabel: 'caracteres',
     emptyError: 'Primero escribe o dicta algún texto.', submitError: 'No se pudo enviar el texto. El original sigue en el campo.',
+    openKeyboardMic: 'Abrir el micrófono del teclado del teléfono',
   },
   terms: {
     automaticLabel: 'Ruta automática (alternativa inteligente)', automaticDescription: 'Elige un flujo completo según el dispositivo, las claves API guardadas y la opción de alternativa en la nube.',
@@ -620,6 +644,8 @@ const FR: LocalePack = {
     groupLabels: { automatic: 'Automatique', 'live-audio': 'Audio en direct', desktop: 'Flux texte sur ordinateur', mobile: 'Flux avec clavier mobile' },
     activeFlowTitle: 'Flux actif', automaticResolvedPrefix: 'Choix automatique', requirementsLabel: 'Prérequis',
     availableLabel: 'Disponible', unavailableLabel: 'Indisponible', selectedLabel: 'Sélectionné',
+    showFlowLabel: 'Afficher le flux complet', hideFlowLabel: 'Masquer le flux complet', closeLabel: 'Fermer le menu des flux',
+    useAutomaticLabel: 'Utiliser le parcours automatique', usingAutomaticLabel: 'Le parcours automatique est actif', automaticBadge: 'Auto',
     locationLabels: { device: 'Appareil', browser: 'Navigateur', network: 'Réseau', storage: 'Enregistré localement' },
   },
   composer: {
@@ -629,6 +655,7 @@ const FR: LocalePack = {
     submit: 'Traduire et lire', submitting: 'Traduction…', clear: 'Effacer',
     shortcutHint: 'Avec un clavier physique, appuyez sur Ctrl/Commande + Entrée pour envoyer.', characterCountLabel: 'caractères',
     emptyError: 'Saisissez ou dictez d’abord du texte.', submitError: 'Le texte n’a pas pu être envoyé. La source reste dans le champ.',
+    openKeyboardMic: 'Ouvrir le micro du clavier du téléphone',
   },
   terms: {
     automaticLabel: 'Routage automatique (repli intelligent)', automaticDescription: 'Choisit un flux complet selon l’appareil, les clés API enregistrées et le réglage de repli cloud.',
@@ -703,6 +730,8 @@ const DE: LocalePack = {
     groupLabels: { automatic: 'Automatisch', 'live-audio': 'Live-Audio', desktop: 'Desktop-Textabläufe', mobile: 'Abläufe mit mobiler Tastatur' },
     activeFlowTitle: 'Aktiver Ablauf', automaticResolvedPrefix: 'Automatisch ausgewählt', requirementsLabel: 'Voraussetzungen',
     availableLabel: 'Verfügbar', unavailableLabel: 'Nicht verfügbar', selectedLabel: 'Ausgewählt',
+    showFlowLabel: 'Gesamten Ablauf anzeigen', hideFlowLabel: 'Ablauf ausblenden', closeLabel: 'Ablaufmenü schließen',
+    useAutomaticLabel: 'Automatische Route verwenden', usingAutomaticLabel: 'Automatische Route ist aktiv', automaticBadge: 'Auto',
     locationLabels: { device: 'Gerät', browser: 'Browser', network: 'Netzwerk', storage: 'Lokal gespeichert' },
   },
   composer: {
@@ -712,6 +741,7 @@ const DE: LocalePack = {
     submit: 'Übersetzen und vorlesen', submitting: 'Übersetzung läuft…', clear: 'Löschen',
     shortcutHint: 'Mit Hardwaretastatur sendet Strg/Befehl + Eingabe.', characterCountLabel: 'Zeichen',
     emptyError: 'Gib zuerst Text ein oder diktiere ihn.', submitError: 'Der Text konnte nicht gesendet werden. Der Ausgangstext bleibt im Feld.',
+    openKeyboardMic: 'Mikrofon der Handytastatur öffnen',
   },
   terms: {
     automaticLabel: 'Automatische Route (intelligenter Rückgriff)', automaticDescription: 'Wählt anhand der Gerätefunktionen, gespeicherten API-Schlüssel und Cloud-Rückgriffseinstellung einen vollständigen Ablauf.',
@@ -787,6 +817,8 @@ const VI: LocalePack = {
     groupLabels: { automatic: 'Tự động', 'live-audio': 'Âm thanh trực tiếp', desktop: 'Quy trình văn bản trên máy tính', mobile: 'Quy trình bàn phím di động' },
     activeFlowTitle: 'Luồng đang dùng', automaticResolvedPrefix: 'Tự động chọn', requirementsLabel: 'Yêu cầu',
     availableLabel: 'Có thể dùng', unavailableLabel: 'Không thể dùng', selectedLabel: 'Đã chọn',
+    showFlowLabel: 'Hiện luồng đầy đủ', hideFlowLabel: 'Ẩn luồng đầy đủ', closeLabel: 'Đóng menu quy trình',
+    useAutomaticLabel: 'Dùng đường dẫn tự động', usingAutomaticLabel: 'Đang dùng đường dẫn tự động', automaticBadge: 'Tự động',
     locationLabels: { device: 'Thiết bị', browser: 'Trình duyệt', network: 'Mạng', storage: 'Lưu cục bộ' },
   },
   composer: {
@@ -796,6 +828,7 @@ const VI: LocalePack = {
     submit: 'Dịch và đọc', submitting: 'Đang dịch…', clear: 'Xóa',
     shortcutHint: 'Với bàn phím vật lý, nhấn Ctrl/Command + Enter để gửi.', characterCountLabel: 'ký tự',
     emptyError: 'Hãy nhập hoặc đọc một đoạn văn bản trước.', submitError: 'Không gửi được văn bản. Nội dung nguồn vẫn còn trong ô.',
+    openKeyboardMic: 'Mở micro bàn phím điện thoại',
   },
   terms: {
     automaticLabel: 'Định tuyến tự động (chuyển hướng thông minh)', automaticDescription: 'Chọn quy trình hoàn chỉnh dựa trên khả năng thiết bị, khóa API đã lưu và cài đặt chuyển sang đám mây.',

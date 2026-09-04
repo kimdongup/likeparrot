@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Cloud, KeyRound, Palette, ReceiptText, Route, X } from 'lucide-react';
+import { KeyRound, Palette, ReceiptText, Route, X } from 'lucide-react';
 import { getUiStrings } from '../constants/translations';
+import {
+  API_KEY_PROVIDERS,
+  getApiKeyProviderCopy,
+} from '../services/apiKeyCatalog';
 import type {
   ApiKeyProvider,
   AutomaticRoutingPreference,
   ThemePreference,
 } from '../services/preferences';
 import type { LanguageOption } from '../types';
-import { ApiKeySettingsPanel } from './ApiKeySettingsPanel';
+import { ApiKeySettingsPanel, type ApiKeySavedValues } from './ApiKeySettingsPanel';
 import { AppearanceSettingsPanel } from './AppearanceSettingsPanel';
 import { AutomaticRoutingSettingsPanel } from './AutomaticRoutingSettingsPanel';
 import { SourceLanguageFlags } from './SourceLanguageFlags';
 
 type ActionResult = boolean | void | Promise<boolean | void>;
-type SettingsSection = 'routing' | 'gemini' | 'openai' | 'azure' | 'appearance';
+type SettingsSection = 'routing' | 'apiKeys' | 'appearance';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -83,6 +87,25 @@ function SettingsDialog({
   const onCloseRef = useRef(onClose);
   const t = getUiStrings(sourceLanguage.code);
 
+  const savedByProvider: Record<ApiKeyProvider, ApiKeySavedValues> = {
+    gemini: { apiKey: geminiApiKey, rememberApiKey: rememberGeminiApiKey },
+    openai: { apiKey: openAiApiKey, rememberApiKey: rememberOpenAiApiKey },
+    azure: {
+      apiKey: azureApiKey,
+      rememberApiKey: rememberAzureApiKey,
+      auxiliaryValue: azureRegion,
+    },
+    azureSpeech: {
+      apiKey: azureSpeechApiKey,
+      rememberApiKey: rememberAzureSpeechApiKey,
+      auxiliaryValue: azureSpeechRegion,
+      extraAuxiliaryValue: azureSpeechResource,
+    },
+  };
+  const anyKeySaved = API_KEY_PROVIDERS.some(
+    (provider) => savedByProvider[provider.id].apiKey
+  );
+
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
@@ -135,9 +158,7 @@ function SettingsDialog({
 
   const sections = [
     { id: 'routing' as const, label: t.settings.automaticRouting, Icon: Route, saved: false },
-    { id: 'gemini' as const, label: t.settings.geminiApi, Icon: KeyRound, saved: Boolean(geminiApiKey) },
-    { id: 'openai' as const, label: t.settings.openAiApi, Icon: Bot, saved: Boolean(openAiApiKey) },
-    { id: 'azure' as const, label: t.settings.azureApi, Icon: Cloud, saved: Boolean(azureApiKey) },
+    { id: 'apiKeys' as const, label: t.settings.apiKeys, Icon: KeyRound, saved: anyKeySaved },
     { id: 'appearance' as const, label: t.settings.appearance, Icon: Palette, saved: false },
   ];
 
@@ -209,7 +230,7 @@ function SettingsDialog({
                   >
                     <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                     <span className="hidden sm:inline">{label}</span>
-                    {saved && id !== 'appearance' && (
+                    {saved && (
                       <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
                     )}
                   </button>
@@ -244,106 +265,26 @@ function SettingsDialog({
               />
             </div>
 
-            <div id="settings-panel-gemini" role="tabpanel" aria-labelledby="settings-tab-gemini" hidden={section !== 'gemini'}>
-              <ApiKeySettingsPanel
-                provider="gemini"
-                apiKey={geminiApiKey}
-                rememberApiKey={rememberGeminiApiKey}
-                title={t.settings.apiKey}
-                description={t.settings.geminiApiDescription}
-                inputLabel={t.settings.apiInputLabel}
-                placeholder="AIzaSy..."
-                helpTitle={t.settings.howToGetKey}
-                helpSteps={[t.settings.apiStep1, t.settings.apiStep2, t.settings.apiStep3]}
-                createKeyLabel={t.settings.createKey}
-                createKeyUrl="https://aistudio.google.com/app/apikey"
-                t={t}
-                onSave={(key, remember) => onSaveApiKey('gemini', key, remember)}
-                onDelete={() => onDeleteApiKey('gemini')}
-              />
-            </div>
-
-            <div id="settings-panel-openai" role="tabpanel" aria-labelledby="settings-tab-openai" hidden={section !== 'openai'}>
-              <ApiKeySettingsPanel
-                provider="openai"
-                apiKey={openAiApiKey}
-                rememberApiKey={rememberOpenAiApiKey}
-                title={t.settings.openAiApiKey}
-                description={t.settings.openAiApiDescription}
-                inputLabel={t.settings.openAiApiInputLabel}
-                placeholder="sk-..."
-                helpTitle={t.settings.openAiHowToGetKey}
-                helpSteps={[t.settings.openAiApiStep1, t.settings.openAiApiStep2, t.settings.openAiApiStep3]}
-                createKeyLabel={t.settings.createOpenAiKey}
-                createKeyUrl="https://platform.openai.com/api-keys"
-                securityNotice={t.settings.openAiTokenNotice}
-                t={t}
-                onSave={(key, remember) => onSaveApiKey('openai', key, remember)}
-                onDelete={() => onDeleteApiKey('openai')}
-              />
-            </div>
-
-            <div id="settings-panel-azure" role="tabpanel" aria-labelledby="settings-tab-azure" hidden={section !== 'azure'}>
-              <ApiKeySettingsPanel
-                provider="azure"
-                apiKey={azureApiKey}
-                rememberApiKey={rememberAzureApiKey}
-                title={t.settings.azureApiKey}
-                description={t.settings.azureApiDescription}
-                inputLabel={t.settings.azureApiInputLabel}
-                placeholder="Azure Translator key"
-                auxiliaryInput={{
-                  value: azureRegion,
-                  label: t.settings.azureRegion,
-                  placeholder: 'koreacentral',
-                  hint: t.settings.azureRegionHint,
-                }}
-                helpTitle={t.settings.azureHowToGetKey}
-                helpSteps={[t.settings.azureApiStep1, t.settings.azureApiStep2, t.settings.azureApiStep3]}
-                createKeyLabel={t.settings.createAzureKey}
-                createKeyUrl="https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation"
-                securityNotice={t.settings.azureTokenNotice}
-                t={t}
-                onSave={(key, remember, region) => onSaveApiKey('azure', key, remember, region)}
-                onDelete={() => onDeleteApiKey('azure')}
-              />
-              <div className="mt-8 border-t border-slate-800 pt-6 [[data-theme=light]_&]:border-slate-200">
-                <ApiKeySettingsPanel
-                  provider="azureSpeech"
-                  apiKey={azureSpeechApiKey}
-                  rememberApiKey={rememberAzureSpeechApiKey}
-                  title={t.settings.azureSpeechApiKey}
-                  description={t.settings.azureSpeechApiDescription}
-                  inputLabel={t.settings.azureSpeechApiInputLabel}
-                  placeholder="Azure Speech key"
-                  auxiliaryInput={{
-                    value: azureSpeechRegion,
-                    label: t.settings.azureSpeechRegion,
-                    placeholder: 'eastus',
-                    hint: t.settings.azureSpeechRegionHint,
-                    required: true,
-                  }}
-                  extraAuxiliaryInput={{
-                    value: azureSpeechResource,
-                    label: t.settings.azureSpeechResource,
-                    placeholder: 'my-speech-resource',
-                    hint: t.settings.azureSpeechResourceHint,
-                  }}
-                  helpTitle={t.settings.azureSpeechHowToGetKey}
-                  helpSteps={[
-                    t.settings.azureSpeechApiStep1,
-                    t.settings.azureSpeechApiStep2,
-                    t.settings.azureSpeechApiStep3,
-                  ]}
-                  createKeyLabel={t.settings.createAzureSpeechKey}
-                  createKeyUrl="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/SpeechServices"
-                  securityNotice={t.settings.azureSpeechTokenNotice}
-                  t={t}
-                  onSave={(key, remember, region, resourceName) =>
-                    onSaveApiKey('azureSpeech', key, remember, region, resourceName)
-                  }
-                  onDelete={() => onDeleteApiKey('azureSpeech')}
-                />
+            <div id="settings-panel-apiKeys" role="tabpanel" aria-labelledby="settings-tab-apiKeys" hidden={section !== 'apiKeys'}>
+              <p className="mb-4 text-sm leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
+                {t.settings.apiKeysDescription}
+              </p>
+              <div className="space-y-3">
+                {API_KEY_PROVIDERS.map((spec) => (
+                  <div
+                    key={spec.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 [[data-theme=light]_&]:border-slate-200 [[data-theme=light]_&]:bg-slate-50"
+                  >
+                    <ApiKeySettingsPanel
+                      spec={spec}
+                      copy={getApiKeyProviderCopy(spec.id, t)}
+                      saved={savedByProvider[spec.id]}
+                      t={t}
+                      onSave={onSaveApiKey}
+                      onDelete={onDeleteApiKey}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -352,7 +293,6 @@ function SettingsDialog({
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

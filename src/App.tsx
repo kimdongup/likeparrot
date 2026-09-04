@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Controls } from './components/Controls';
 import { Header } from './components/Header';
@@ -6,7 +6,8 @@ import { MobileDictationComposer } from './components/MobileDictationComposer';
 import { SettingsModal } from './components/SettingsModal';
 import { TargetLanguageBar } from './components/TargetLanguageBar';
 import { TranscriptTerminal } from './components/TranscriptTerminal';
-import { WorkflowPicker } from './components/WorkflowPicker';
+import { WorkflowSidebar } from './components/WorkflowDrawer';
+import { resolveWorkflowCopy, WorkflowActiveFlow } from './components/WorkflowPicker';
 import { getUiStrings } from './constants/translations';
 import { useLikeParrotController } from './hooks/useLikeParrotController';
 import {
@@ -43,9 +44,64 @@ export function App() {
     : undefined;
   const workflowBusy = activity.isListening || activity.isConnecting ||
     activity.isSpeaking || transcript.isTranslating;
+  const [sidebarExpanded, setSidebarExpanded] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [flowProfileId, setFlowProfileId] = useState<typeof workflow.selectedId | null>(null);
+  const isAutomatic = workflow.selectedId === 'auto';
+  const pickerValue = isAutomatic
+    ? workflow.resolvedProfileId ?? workflow.selectedId
+    : workflow.selectedId;
+  const flowProfile = flowProfileId
+    ? workflow.profiles.find((profile) => profile.id === flowProfileId)
+    : undefined;
+  const resolvedWorkflowCopy = resolveWorkflowCopy(workflowCopy);
 
   return (
-    <div className="app-shell min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div className="app-shell flex min-h-screen selection:bg-indigo-500 selection:text-white">
+      {!view.isBillingPlanPage && (
+        <WorkflowSidebar
+          expanded={sidebarExpanded}
+          mobileOpen={mobileSidebarOpen}
+          expandLabel={t.header.expandSidebar}
+          collapseLabel={t.header.collapseSidebar}
+          onExpandedChange={setSidebarExpanded}
+          onMobileOpenChange={setMobileSidebarOpen}
+          profiles={workflow.profiles}
+          value={pickerValue}
+          selectedId={workflow.selectedId}
+          availability={workflow.availability}
+          resolvedProfileId={workflow.resolvedProfileId}
+          onChange={workflow.change}
+          disabled={workflowBusy}
+          copy={workflowCopy}
+          isAutomatic={isAutomatic}
+          flowProfileId={flowProfileId}
+          onToggleFlow={(id) => {
+            setFlowProfileId((current) => current === id ? null : id);
+          }}
+        />
+      )}
+      {flowProfile && !view.isBillingPlanPage && (
+        <section
+          className="sticky top-0 hidden h-dvh w-[min(24rem,38vw)] shrink-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)] md:flex"
+          aria-label={resolvedWorkflowCopy.activeFlowTitle}
+        >
+          <WorkflowActiveFlow
+            activeProfile={flowProfile}
+            copy={resolvedWorkflowCopy}
+            instanceId="desktop-flow"
+            automaticNote={
+              isAutomatic && flowProfile.id === workflow.resolvedProfileId
+                ? resolvedWorkflowCopy.usingAutomaticLabel
+                : undefined
+            }
+            onClose={() => setFlowProfileId(null)}
+          />
+        </section>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col">
       <Header
         isListening={activity.isListening}
         isConnecting={activity.isConnecting}
@@ -59,9 +115,10 @@ export function App() {
         selectedSourceLang={languages.source}
         onSourceLangChange={languages.changeSource}
         workflowLabel={workflowLabel}
+        onOpenWorkflow={() => setMobileSidebarOpen(true)}
       />
 
-      <main className="app-main flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-4 sm:gap-5">
+      <main className="app-main flex min-w-0 w-full flex-1 flex-col gap-4 p-3 sm:gap-5 sm:p-5 lg:p-6">
         {view.errorMessage && (
           <div
             role="alert"
@@ -94,20 +151,30 @@ export function App() {
               {t.common.connecting}
             </div>
           )}>
-            <BillingPlanPage uiLanguageCode={languages.source.code} />
+            <BillingPlanPage
+              uiLanguageCode={languages.source.code}
+              onBackToHome={() => actions.navigate('/')}
+            />
           </Suspense>
         ) : (
           <>
-            <WorkflowPicker
-              profiles={workflow.profiles}
-              value={workflow.selectedId}
-              availability={workflow.availability}
-              resolvedProfileId={workflow.resolvedProfileId}
-              onChange={workflow.change}
-              disabled={workflowBusy}
-              copy={workflowCopy}
-            />
-
+            {flowProfile && (
+              <div className="md:hidden">
+                <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-xl">
+                  <WorkflowActiveFlow
+                    activeProfile={flowProfile}
+                    copy={resolvedWorkflowCopy}
+                    instanceId="mobile-flow"
+                    automaticNote={
+                      isAutomatic && flowProfile.id === workflow.resolvedProfileId
+                        ? resolvedWorkflowCopy.usingAutomaticLabel
+                        : undefined
+                    }
+                    onClose={() => setFlowProfileId(null)}
+                  />
+                </div>
+              </div>
+            )}
             {workflow.isMobileDictation ? (
               <>
                 <TargetLanguageBar
@@ -152,6 +219,7 @@ export function App() {
           </>
         )}
       </main>
+      </div>
 
       <SettingsModal
         isOpen={settings.isOpen}
