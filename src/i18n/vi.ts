@@ -30,6 +30,7 @@ export const VIETNAMESE_UI = createLocale('vi-VN', {
     saveTranscript: 'Lưu bản ghi dưới dạng HTML',
     saveTranscriptTitle: 'Lưu bản ghi cuộc trò chuyện dưới dạng HTML',
     noTranscriptToSave: 'Chưa có bản ghi để lưu',
+    transcriptExportPending: 'Có thể tải xuống sau khi dịch nền hoàn tất',
     openSettings: 'Mở phần cài đặt',
     openSettingsNeedsKey: 'Mở phần cài đặt; quy trình đã chọn còn thiếu cài đặt bắt buộc',
     settingsTitle: 'Cài đặt ngôn ngữ, khóa API của nhà cung cấp và giao diện',

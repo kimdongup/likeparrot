@@ -18,7 +18,9 @@ import {
 import type {
   FocusEvent as ReactFocusEvent,
   MouseEvent as ReactMouseEvent,
+  RefObject,
 } from 'react';
+import { VirtualList } from './VirtualList';
 import { getLocalizedLanguageNameByCode } from '../constants/languages';
 import { getUiStrings, type UiStrings } from '../constants/translations';
 import { normalizePipelineTag } from '../services/pipelinePresentation';
@@ -154,8 +156,8 @@ const TranscriptRow = memo(function TranscriptRow({
   };
 
   return (
-    <li>
       <article
+        role="listitem"
         ref={rowRef}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => {
@@ -180,8 +182,8 @@ const TranscriptRow = memo(function TranscriptRow({
           <span className="sr-only" lang={t.locale}>
             {isExpanded ? t.transcript.hideDetails : t.transcript.showDetails}
           </span>
-          <span className="flex items-start gap-2 text-[13px] leading-6 text-slate-400 sm:text-sm [[data-theme=light]_&]:text-slate-600">
-            <span className="w-10 shrink-0 select-none text-right text-slate-600 [[data-theme=light]_&]:text-slate-400" aria-hidden="true">
+          <span className="flex items-start gap-2 text-[15px] font-semibold leading-7 text-slate-100 sm:text-base [[data-theme=light]_&]:text-slate-900">
+            <span className="w-10 shrink-0 select-none text-right text-slate-500 [[data-theme=light]_&]:text-slate-400" aria-hidden="true">
               {String(index + 1).padStart(3, '0')} &lt;
             </span>
             <span
@@ -190,28 +192,13 @@ const TranscriptRow = memo(function TranscriptRow({
             >
               {sourceTranscriptUnavailable ? t.transcript.sourceUnavailable : card.sourceText}
             </span>
-          </span>
-          <span className={`mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 sm:text-base ${
-            hasCompletedTranslation
-              ? 'text-slate-100 [[data-theme=light]_&]:text-slate-900'
-              : translationStatus === 'pending'
-                ? 'text-amber-300 [[data-theme=light]_&]:text-amber-700'
-                : 'text-rose-300 [[data-theme=light]_&]:text-rose-700'
-          }`}>
-            <span className="w-10 shrink-0 select-none text-right text-indigo-400" aria-hidden="true">&gt;</span>
-            <span
-              className="min-w-0 whitespace-pre-wrap break-words"
-              lang={hasCompletedTranslation ? card.targetLangCode : t.locale}
-              role={hasCompletedTranslation ? undefined : 'status'}
-            >
-              {hasCompletedTranslation ? card.translatedText : translationStateText}
-              {translationStatus === 'pending' && (
-                <span
-                  className="ml-1 inline-block h-4 w-2 translate-y-0.5 bg-current motion-safe:animate-pulse"
-                  aria-hidden="true"
-                />
-              )}
-            </span>
+            {translationStatus === 'pending' && (
+              <span
+                className="mt-2 h-2 w-2 shrink-0 rounded-full bg-amber-400 motion-safe:animate-pulse"
+                title={t.transcript.translationPending}
+                aria-label={t.transcript.translationPending}
+              />
+            )}
             {isPlaying && hasCompletedTranslation && (
               <Volume2 className="mt-1.5 h-4 w-4 shrink-0 text-emerald-400 motion-safe:animate-pulse" aria-hidden="true" />
             )}
@@ -224,6 +211,14 @@ const TranscriptRow = memo(function TranscriptRow({
           className="ml-0 mt-2 flex flex-col gap-2 border-l border-slate-700 pl-3 text-[11px] text-slate-400 sm:ml-12 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:text-slate-600"
         >
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              {hasCompletedTranslation && (
+                <span className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium text-slate-200 [[data-theme=light]_&]:text-slate-800" lang={card.targetLangCode}>
+                  {card.translatedText}
+                </span>
+              )}
+              {!hasCompletedTranslation && (
+                <span role="status">{translationStateText}</span>
+              )}
               <span>
                 <span lang={t.locale}>{sourceLanguageName}</span>
                 {' → '}
@@ -306,7 +301,6 @@ const TranscriptRow = memo(function TranscriptRow({
             </span>
         </div>
       </article>
-    </li>
   );
 });
 
@@ -317,6 +311,7 @@ interface TranscriptHistoryProps {
   onStopCard: () => void;
   onDeleteCard: (id: string) => void;
   strings: UiStrings;
+  scrollRoot: RefObject<HTMLElement | null>;
 }
 
 const TranscriptHistory = memo(function TranscriptHistory({
@@ -326,23 +321,31 @@ const TranscriptHistory = memo(function TranscriptHistory({
   onStopCard,
   onDeleteCard,
   strings,
+  scrollRoot,
 }: TranscriptHistoryProps) {
   const orderedCards = useMemo(() => [...cards].reverse(), [cards]);
+  const getKey = useCallback((card: TranslationCard) => card.id, []);
   return (
-    <ol className="m-0 list-none p-0">
-      {orderedCards.map((card, index) => (
-        <TranscriptRow
-          key={card.id}
-          card={card}
-          index={index}
-          isPlaying={playingCardId === card.id}
-          onPlayCard={onPlayCard}
-          onStopCard={onStopCard}
-          onDeleteCard={onDeleteCard}
-          strings={strings}
-        />
-      ))}
-    </ol>
+    <div role="list" className="m-0 p-0">
+      <VirtualList
+        items={orderedCards}
+        getKey={getKey}
+        scrollRoot={scrollRoot}
+        estimateHeight={72}
+        overscan={8}
+        renderItem={(card, index) => (
+          <TranscriptRow
+            card={card}
+            index={index}
+            isPlaying={playingCardId === card.id}
+            onPlayCard={onPlayCard}
+            onStopCard={onStopCard}
+            onDeleteCard={onDeleteCard}
+            strings={strings}
+          />
+        )}
+      />
+    </div>
   );
 });
 
@@ -357,7 +360,7 @@ export function TranscriptTerminal({
   isTranslating,
   streamingTranslation = '',
   sourceLangCode = 'ko',
-  targetLangCode = 'en',
+  targetLangCode: _targetLangCode = 'en',
 }: TranscriptTerminalProps) {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -454,6 +457,7 @@ export function TranscriptTerminal({
           onStopCard={stableStopCard}
           onDeleteCard={stableDeleteCard}
           strings={t}
+          scrollRoot={terminalRef}
         />
 
         <span className="sr-only" role="status" aria-live="polite">
@@ -464,25 +468,14 @@ export function TranscriptTerminal({
               : ''}
         </span>
 
-        {(interimText || isTranslating || streamingTranslation) && (
+        {interimText && (
           <div
             className="border-t border-dashed border-indigo-500/30 px-2 py-3 sm:px-3 [[data-theme=light]_&]:border-indigo-300"
           >
-            {interimText && (
-              <p className="flex items-start gap-2 text-[13px] leading-6 text-slate-400 sm:text-sm [[data-theme=light]_&]:text-slate-600">
-                <span className="w-10 shrink-0 select-none text-right text-amber-400" aria-hidden="true">… &lt;</span>
-                <span className="min-w-0 whitespace-pre-wrap break-words" lang={sourceLangCode}>{interimText}</span>
-              </p>
-            )}
-            {(streamingTranslation || isTranslating) && (
-              <p className="mt-0.5 flex items-start gap-2 text-[15px] font-semibold leading-7 text-indigo-100 sm:text-base [[data-theme=light]_&]:text-indigo-900">
-                <span className="w-10 shrink-0 select-none text-right text-indigo-400" aria-hidden="true">… &gt;</span>
-                <span className="min-w-0 whitespace-pre-wrap break-words" lang={targetLangCode}>
-                  {streamingTranslation || t.transcript.streaming}
-                  <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 bg-indigo-400 motion-safe:animate-pulse" aria-hidden="true" />
-                </span>
-              </p>
-            )}
+            <p className="flex items-start gap-2 text-[15px] font-semibold leading-7 text-slate-300 sm:text-base [[data-theme=light]_&]:text-slate-700">
+              <span className="w-10 shrink-0 select-none text-right text-amber-400" aria-hidden="true">… &lt;</span>
+              <span className="min-w-0 whitespace-pre-wrap break-words" lang={sourceLangCode}>{interimText}</span>
+            </p>
           </div>
         )}
       </div>

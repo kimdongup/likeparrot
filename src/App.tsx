@@ -109,7 +109,8 @@ export function App() {
         hasConfigurationIssue={!workflow.isSelectedAvailable}
         onOpenSettings={actions.openSettings}
         onSaveTranscript={actions.saveTranscript}
-        canSaveTranscript={transcript.cards.length > 0}
+        canSaveTranscript={transcript.canExport}
+        hasTranscript={transcript.cards.length > 0}
         isBillingPlanPage={view.isBillingPlanPage}
         onNavigate={actions.navigate}
         selectedSourceLang={languages.source}

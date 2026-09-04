@@ -30,6 +30,7 @@ export const CHINESE_UI = createLocale('zh-CN', {
     saveTranscript: '将对话记录保存为HTML',
     saveTranscriptTitle: '将对话记录保存为HTML文件',
     noTranscriptToSave: '没有可保存的对话记录',
+    transcriptExportPending: '后台翻译完成后即可下载',
     openSettings: '打开设置',
     openSettingsNeedsKey: '打开设置；所选实时服务商需要API密钥',
     settingsTitle: '语言、服务商API密钥和外观设置',

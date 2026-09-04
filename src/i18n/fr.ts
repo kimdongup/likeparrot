@@ -30,6 +30,7 @@ export const FRENCH_UI = createLocale('fr-FR', {
     saveTranscript: 'Enregistrer la transcription au format HTML',
     saveTranscriptTitle: 'Enregistrer la transcription de la conversation au format HTML',
     noTranscriptToSave: 'Aucune transcription à enregistrer',
+    transcriptExportPending: 'Le téléchargement sera disponible une fois la traduction en arrière-plan terminée',
     openSettings: 'Ouvrir les paramètres',
     openSettingsNeedsKey: 'Ouvrir les paramètres ; le flux sélectionné nécessite un réglage',
     settingsTitle: 'Paramètres de langue, de clé API du fournisseur et d’apparence',

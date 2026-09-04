@@ -29,6 +29,7 @@ export interface UiStrings {
     saveTranscript: string;
     saveTranscriptTitle: string;
     noTranscriptToSave: string;
+    transcriptExportPending: string;
     openSettings: string;
     openSettingsNeedsKey: string;
     settingsTitle: string;

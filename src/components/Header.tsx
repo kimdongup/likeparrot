@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onSaveTranscript?: () => void;
   canSaveTranscript?: boolean;
+  hasTranscript?: boolean;
   isBillingPlanPage: boolean;
   onNavigate: (path: string) => void;
   selectedSourceLang: LanguageOption;
@@ -65,6 +66,7 @@ export const Header = memo(function Header({
   onOpenSettings,
   onSaveTranscript,
   canSaveTranscript = false,
+  hasTranscript = false,
   isBillingPlanPage,
   onNavigate,
   selectedSourceLang,
@@ -181,7 +183,11 @@ export const Header = memo(function Header({
             {onSaveTranscript && (
               <HeaderIconButton
                 label={t.header.saveTranscript}
-                title={canSaveTranscript ? t.header.saveTranscriptTitle : t.header.noTranscriptToSave}
+                title={canSaveTranscript
+                  ? t.header.saveTranscriptTitle
+                  : hasTranscript
+                    ? t.header.transcriptExportPending
+                    : t.header.noTranscriptToSave}
                 onClick={onSaveTranscript}
                 disabled={!canSaveTranscript}
               >

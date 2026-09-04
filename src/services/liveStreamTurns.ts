@@ -1,8 +1,10 @@
+import type { TranslationStatus } from '../types';
 import type { LiveTranslationTurn } from './liveTranslation';
 
-const SENTENCE_QUIET_MS = 800;
-const PHRASE_QUIET_MS = 1_400;
-const SOURCE_CATCHUP_MS = 450;
+const SOURCE_SENTENCE_QUIET_MS = 400;
+const SOURCE_PHRASE_QUIET_MS = 800;
+const OUTPUT_SENTENCE_QUIET_MS = 500;
+const OUTPUT_PHRASE_QUIET_MS = 900;
 const MAX_COMMIT_SENTENCES = 3;
 const SENTENCE_BREAK = /[.!?。！？…]["')\]]*\s+/u;
 
@@ -76,19 +78,27 @@ const takeReadyPrefix = (text: string): { prefix: string; rest: string } => {
   return { prefix: text.slice(0, splitAt).trim(), rest };
 };
 
+const createTurnId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `live-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 /**
- * Pairs streaming source text with the translated text/audio that arrives
- * alongside it, and commits utterance-sized cards instead of one session blob.
+ * Two-lane live transcript ledger: source cards are committed as soon as
+ * speech is recognizable. Translated text is attached later, in order.
  */
 export class LiveStreamTurnAssembler {
   private sourceText = '';
   private outputText = '';
   private committedSource = '';
   private committedOutput = '';
+  private pendingIds: string[] = [];
   private speechStartedAt = 0;
   private firstOutputAt = 0;
-  private quietTimer: number | null = null;
-  private catchupTimer: number | null = null;
+  private sourceQuietTimer: number | null = null;
+  private outputQuietTimer: number | null = null;
   private readonly emitTurn: (turn: LiveStreamTurnPayload) => void;
 
   constructor(emitTurn: (turn: LiveStreamTurnPayload) => void) {
@@ -104,7 +114,7 @@ export class LiveStreamTurnAssembler {
   }
 
   public hasBufferedData(): boolean {
-    return Boolean(this.sourceText.trim() || this.outputText.trim());
+    return Boolean(this.sourceText.trim() || this.outputText.trim() || this.pendingIds.length > 0);
   }
 
   public noteSpeech(): void {
@@ -119,6 +129,14 @@ export class LiveStreamTurnAssembler {
   public appendSource(incoming: string, mode: LiveTranscriptMode = 'merge'): void {
     this.noteSpeech();
     this.sourceText = applyIncoming(this.sourceText, incoming, mode, this.committedSource);
+    const ready = takeReadyPrefix(this.sourceText);
+    if (ready.prefix) {
+      this.scheduleSourceFreeze(0, ready.prefix, ready.rest);
+      return;
+    }
+    this.scheduleSourceFreeze(
+      endsWithSentence(this.sourceText) ? SOURCE_SENTENCE_QUIET_MS : SOURCE_PHRASE_QUIET_MS
+    );
   }
 
   public appendOutput(
@@ -131,20 +149,24 @@ export class LiveStreamTurnAssembler {
     if (!armCommit) return;
     const ready = takeReadyPrefix(this.outputText);
     if (ready.prefix) {
-      this.scheduleCommit(SOURCE_CATCHUP_MS, ready.prefix, ready.rest);
+      this.scheduleOutputAttach(0, ready.prefix, ready.rest);
       return;
     }
-    this.scheduleCommit(endsWithSentence(this.outputText) ? SENTENCE_QUIET_MS : PHRASE_QUIET_MS);
+    this.scheduleOutputAttach(
+      endsWithSentence(this.outputText) ? OUTPUT_SENTENCE_QUIET_MS : OUTPUT_PHRASE_QUIET_MS
+    );
   }
 
   public completeUtterance(): void {
-    if (!this.hasBufferedData()) return;
-    this.scheduleCommit(this.sourceText.trim() ? 0 : SOURCE_CATCHUP_MS);
+    this.freezeOpenSource();
+    this.attachReadyOutput(this.outputText, '');
   }
 
   public flush(): void {
     this.clearTimers();
-    this.commit(this.outputText, '');
+    this.freezeOpenSource();
+    this.attachReadyOutput(this.outputText, '');
+    this.abandonUnmatchedSources();
   }
 
   public reset(): void {
@@ -153,6 +175,7 @@ export class LiveStreamTurnAssembler {
     this.outputText = '';
     this.committedSource = '';
     this.committedOutput = '';
+    this.pendingIds = [];
     this.speechStartedAt = 0;
     this.firstOutputAt = 0;
   }
@@ -161,48 +184,105 @@ export class LiveStreamTurnAssembler {
     this.reset();
   }
 
-  private scheduleCommit(delayMs: number, prefix = '', rest = ''): void {
-    this.clearTimers();
+  private scheduleSourceFreeze(delayMs: number, prefix = '', rest = ''): void {
+    if (this.sourceQuietTimer !== null) window.clearTimeout(this.sourceQuietTimer);
     const run = () => {
-      this.catchupTimer = null;
-      this.quietTimer = null;
-      if (prefix) this.commit(prefix, rest);
-      else this.commit(this.outputText, '');
+      this.sourceQuietTimer = null;
+      if (prefix) {
+        this.sourceText = prefix;
+        this.freezeOpenSource();
+        this.sourceText = rest;
+        return;
+      }
+      this.freezeOpenSource();
     };
     if (delayMs <= 0) {
       run();
       return;
     }
-    const timer = window.setTimeout(run, delayMs);
-    if (prefix) this.catchupTimer = timer;
-    else this.quietTimer = timer;
+    this.sourceQuietTimer = window.setTimeout(run, delayMs);
   }
 
-  private commit(outputSlice: string, remainder: string): void {
-    const translatedText = outputSlice.trim();
+  private freezeOpenSource(): void {
     const sourceText = this.sourceText.trim();
-    if (!translatedText && !sourceText) {
-      this.speechStartedAt = 0;
-      this.firstOutputAt = 0;
+    if (sourceText) {
+      const id = createTurnId();
+      this.emitTurn({
+        id,
+        sourceText,
+        translatedText: '',
+        translationStatus: 'pending',
+        latencyMs: 0,
+      });
+      this.pendingIds.push(id);
+      this.committedSource = `${this.committedSource}${this.committedSource ? ' ' : ''}${sourceText}`.trim();
+    }
+    this.sourceText = '';
+    this.speechStartedAt = 0;
+  }
+
+  private scheduleOutputAttach(delayMs: number, prefix = '', rest = ''): void {
+    if (this.outputQuietTimer !== null) window.clearTimeout(this.outputQuietTimer);
+    const run = () => {
+      this.outputQuietTimer = null;
+      if (prefix) this.attachReadyOutput(prefix, rest);
+      else this.attachReadyOutput(this.outputText, '');
+    };
+    if (delayMs <= 0) {
+      run();
       return;
     }
+    this.outputQuietTimer = window.setTimeout(run, delayMs);
+  }
+
+  private attachReadyOutput(outputSlice: string, remainder: string): void {
+    const translatedText = outputSlice.trim();
     if (!translatedText) return;
+    this.freezeOpenSource();
+    const id = this.pendingIds.shift();
     const latencyMs = this.speechStartedAt && this.firstOutputAt
       ? Math.max(0, Math.round(this.firstOutputAt - this.speechStartedAt))
       : 0;
-    this.emitTurn({ sourceText, translatedText, latencyMs });
-    this.committedSource = `${this.committedSource}${this.committedSource && sourceText ? ' ' : ''}${sourceText}`.trim();
-    this.committedOutput = `${this.committedOutput}${this.committedOutput && translatedText ? ' ' : ''}${translatedText}`.trim();
-    this.sourceText = '';
+    if (id) {
+      this.emitTurn({
+        id,
+        sourceText: '',
+        translatedText,
+        translationStatus: 'complete',
+        latencyMs,
+      });
+    } else {
+      this.emitTurn({
+        id: createTurnId(),
+        sourceText: '',
+        translatedText,
+        translationStatus: 'complete',
+        latencyMs,
+      });
+    }
+    this.committedOutput = `${this.committedOutput}${this.committedOutput ? ' ' : ''}${translatedText}`.trim();
     this.outputText = remainder.trim();
-    this.speechStartedAt = this.outputText ? performance.now() : 0;
     this.firstOutputAt = this.outputText ? performance.now() : 0;
+    this.speechStartedAt = this.outputText ? performance.now() : 0;
+  }
+
+  private abandonUnmatchedSources(): void {
+    const leftover = this.pendingIds.splice(0);
+    for (const id of leftover) {
+      this.emitTurn({
+        id,
+        sourceText: '',
+        translatedText: '',
+        translationStatus: 'failed' as TranslationStatus,
+        latencyMs: 0,
+      });
+    }
   }
 
   private clearTimers(): void {
-    if (this.quietTimer !== null) window.clearTimeout(this.quietTimer);
-    if (this.catchupTimer !== null) window.clearTimeout(this.catchupTimer);
-    this.quietTimer = null;
-    this.catchupTimer = null;
+    if (this.sourceQuietTimer !== null) window.clearTimeout(this.sourceQuietTimer);
+    if (this.outputQuietTimer !== null) window.clearTimeout(this.outputQuietTimer);
+    this.sourceQuietTimer = null;
+    this.outputQuietTimer = null;
   }
 }

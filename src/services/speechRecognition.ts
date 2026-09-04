@@ -200,6 +200,11 @@ export const resolveTranscriptCoalesce = (
   return { action: 'append', text: nextText };
 };
 
+/**
+ * Chrome exposes SpeechRecognition only on window — not in Workers, and not as
+ * two concurrent instances. Continuous listening stays here. Translated audio
+ * must play through AudioContext/<audio>, not window.speechSynthesis.
+ */
 export class WebSpeechRecognizer {
   private recognition: SpeechRecognitionType | null = null;
   private desiredListening = false;

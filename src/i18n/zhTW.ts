@@ -30,6 +30,7 @@ export const TRADITIONAL_CHINESE_UI = createLocale('zh-TW', {
     saveTranscript: '將對話記錄儲存為HTML',
     saveTranscriptTitle: '將對話記錄儲存為HTML檔案',
     noTranscriptToSave: '沒有可儲存的對話記錄',
+    transcriptExportPending: '背景翻譯完成後即可下載',
     openSettings: '開啟設定',
     openSettingsNeedsKey: '開啟設定；所選即時服務供應商需要API金鑰',
     settingsTitle: '語言、服務供應商API金鑰與外觀設定',

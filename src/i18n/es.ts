@@ -30,6 +30,7 @@ export const SPANISH_UI = createLocale('es-ES', {
     saveTranscript: 'Guardar la transcripción como HTML',
     saveTranscriptTitle: 'Guardar la transcripción de la conversación como HTML',
     noTranscriptToSave: 'No hay ninguna transcripción que guardar',
+    transcriptExportPending: 'La descarga estará disponible cuando termine la traducción en segundo plano',
     openSettings: 'Abrir la configuración',
     openSettingsNeedsKey: 'Abrir la configuración; el proveedor en directo seleccionado necesita una clave de API',
     settingsTitle: 'Configuración del idioma, la clave de API del proveedor y la apariencia',

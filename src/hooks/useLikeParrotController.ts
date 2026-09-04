@@ -48,7 +48,9 @@ import {
   deleteTranslationCard,
   loadTranslationCards,
   saveTranslationCard,
+  flushTranslationCardSaves,
 } from '../services/translationHistory';
+import { isTranscriptExportReady } from '../services/transcriptExportState';
 import { TranslationService } from '../services/translator';
 import {
   getWorkflowAvailabilities,
@@ -115,6 +117,7 @@ export interface LikeParrotController {
     interimText: string;
     isTranslating: boolean;
     streamingTranslation: string;
+    canExport: boolean;
     play: (card: TranslationCard) => void;
     stop: () => void;
     delete: (id: string) => void;
@@ -397,19 +400,21 @@ export function useLikeParrotController(): LikeParrotController {
   const liveStartAttemptRef = useRef(0);
 
   const commitCards = useCallback((nextCards: TranslationCard[]) => {
-    const ordered = nextCards
-      .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime())
-      .slice(0, MAX_VISIBLE_CARDS);
+    const ordered = nextCards.length > MAX_VISIBLE_CARDS
+      ? nextCards.slice(0, MAX_VISIBLE_CARDS)
+      : nextCards;
     cardsRef.current = ordered;
     setCards(ordered);
   }, []);
 
-  const upsertCard = useCallback((card: TranslationCard) => {
+  const upsertCard = useCallback((card: TranslationCard, persist = true) => {
     if (deletedPendingCardIdsRef.current.has(card.id)) return;
-    commitCards([
-      card,
-      ...cardsRef.current.filter((existing) => existing.id !== card.id),
-    ]);
+    const existingIndex = cardsRef.current.findIndex((existing) => existing.id === card.id);
+    const nextCards = existingIndex >= 0
+      ? cardsRef.current.map((existing, index) => index === existingIndex ? card : existing)
+      : [card, ...cardsRef.current];
+    commitCards(nextCards);
+    if (!persist) return;
     void saveTranslationCard(card).catch((error) => {
       console.warn('[TranslationHistory] save failed:', error);
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveTranscript);
@@ -484,6 +489,7 @@ export function useLikeParrotController(): LikeParrotController {
     setPlayingCardId(null);
     setInterimText('');
     setStreamingTranslation('');
+    void flushTranslationCardSaves();
   }, [cancelPipeline, clearResumeTimer]);
 
   const queueSourceTranslation = useCallback((
@@ -590,6 +596,10 @@ export function useLikeParrotController(): LikeParrotController {
 
     const processTranslation = async () => {
       if (translationTokenRef.current.get(cardId) !== jobToken) return;
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      if (translationTokenRef.current.get(cardId) !== jobToken) return;
       const controller = new AbortController();
       activePipelineRequestsRef.current.set(cardId, controller);
       const textForTranslation = translationSourceRef.current.get(cardId) ?? cleanText;
@@ -639,9 +649,9 @@ export function useLikeParrotController(): LikeParrotController {
         });
         setLastLatencyMs(endToEndLatencyMs);
 
-        // Desktop follow-along keeps the microphone open. Automatic TTS would
-        // abort recognition and drop the next utterance, so playback is manual.
-        if (result.translatedText.trim() && profile.inputMethod !== 'desktop_web_speech') {
+        // Play through AudioContext (Azure Speech TTS) when possible so Chrome
+        // SpeechRecognition can keep listening. Device speechSynthesis is fallback.
+        if (result.translatedText.trim()) {
           SpeechService.enqueueChunk(
             result.translatedText,
             currentTarget.speechCode,
@@ -739,6 +749,7 @@ export function useLikeParrotController(): LikeParrotController {
     azureSpeechApiKeyRef.current = azureSpeechApiKey;
     azureSpeechRegionRef.current = azureSpeechRegion;
     azureSpeechResourceRef.current = azureSpeechResource;
+    SpeechService.configureAzureSpeech(azureSpeechApiKey, azureSpeechRegion);
   }, [
     apiKey,
     azureApiKey,
@@ -790,7 +801,9 @@ export function useLikeParrotController(): LikeParrotController {
         if (!active || invalidationAtStart !== historyInvalidationRef.current) return;
         const merged = new Map(storedCards.map((card) => [card.id, card]));
         for (const card of cardsRef.current) merged.set(card.id, card);
-        commitCards([...merged.values()]);
+        commitCards([...merged.values()].sort(
+          (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
+        ));
       })
       .catch((error) => {
         console.warn('[TranslationHistory] load failed:', error);
@@ -814,31 +827,62 @@ export function useLikeParrotController(): LikeParrotController {
       },
       onOutputTranscript: (text) => {
         if (!canUpdateLiveUi(modelId)) return;
-        setStreamingTranslation(text);
-        setIsTranslating(Boolean(text));
+        setIsTranslating(Boolean(text.trim()));
       },
-      onTurnComplete: ({
-        sourceText,
-        translatedText,
-        sourceLanguageCode,
-        targetLanguageCode,
-        latencyMs,
-      }) => {
-        if (!translatedText.trim()) return;
+      onTurnComplete: (turn) => {
         const currentSource = SUPPORTED_LANGUAGES.find(
-          (language) => language.code === sourceLanguageCode
+          (language) => language.code === turn.sourceLanguageCode
         ) ?? sourceLangRef.current;
         const currentTarget = SUPPORTED_LANGUAGES.find(
-          (language) => language.code === targetLanguageCode
+          (language) => language.code === turn.targetLanguageCode
         ) ?? targetLangRef.current;
-        if (canUpdateLiveUi(modelId)) setLastLatencyMs(latencyMs);
+        const existing = cardsRef.current.find((card) => card.id === turn.id);
+        if (turn.translationStatus === 'pending') {
+          if (existing) {
+            upsertCard({
+              ...existing,
+              sourceText: turn.sourceText || existing.sourceText,
+              sourceTextUnavailable: !(turn.sourceText || existing.sourceText),
+            }, false);
+            return;
+          }
+          upsertCard({
+            id: turn.id,
+            timestamp: new Date(),
+            sourceText: turn.sourceText,
+            sourceTextUnavailable: !turn.sourceText,
+            translatedText: '',
+            translationStatus: 'pending',
+            inputMethod: 'live_audio',
+            workflowId: modelId,
+            sourceLang: currentSource.name,
+            sourceLangCode: currentSource.code,
+            targetLang: currentTarget.name,
+            targetLangCode: currentTarget.speechCode,
+            pipelineTag: getSoundFirstModel(modelId).transcriptTag,
+          });
+          return;
+        }
+        if (canUpdateLiveUi(modelId) && turn.latencyMs) setLastLatencyMs(turn.latencyMs);
+        if (existing) {
+          patchCard(turn.id, {
+            translatedText: turn.translatedText,
+            translationStatus: turn.translationStatus,
+            translationFailureReason: turn.translationStatus === 'failed' ? 'interrupted' : undefined,
+            latencyMs: turn.latencyMs || existing.latencyMs,
+          });
+          if (turn.translationStatus === 'complete') setIsTranslating(false);
+          return;
+        }
+        if (!turn.sourceText.trim() && !turn.translatedText.trim()) return;
         upsertCard({
-          id: createCardId(),
+          id: turn.id,
           timestamp: new Date(),
-          sourceText,
-          sourceTextUnavailable: !sourceText,
-          translatedText,
-          translationStatus: 'complete',
+          sourceText: turn.sourceText,
+          sourceTextUnavailable: !turn.sourceText,
+          translatedText: turn.translatedText,
+          translationStatus: turn.translationStatus,
+          translationFailureReason: turn.translationStatus === 'failed' ? 'interrupted' : undefined,
           inputMethod: 'live_audio',
           workflowId: modelId,
           sourceLang: currentSource.name,
@@ -846,7 +890,7 @@ export function useLikeParrotController(): LikeParrotController {
           targetLang: currentTarget.name,
           targetLangCode: currentTarget.speechCode,
           pipelineTag: getSoundFirstModel(modelId).transcriptTag,
-          latencyMs,
+          latencyMs: turn.latencyMs,
         });
       },
       onAudioPlayingState: (playing) => {
@@ -897,7 +941,7 @@ export function useLikeParrotController(): LikeParrotController {
       azureSpeechTranslationService.dispose();
       liveServicesRef.current = {};
     };
-  }, [upsertCard]);
+  }, [patchCard, upsertCard]);
 
   useEffect(() => {
     if (!WebSpeechRecognizer.isSupported()) return;
@@ -1107,7 +1151,12 @@ export function useLikeParrotController(): LikeParrotController {
   }, []);
 
   const handleSaveTranscript = useCallback(() => {
-    if (cardsRef.current.length === 0) return;
+    if (!isTranscriptExportReady({
+      cards: cardsRef.current,
+      isListening,
+      isConnecting,
+      isTranslating,
+    })) return;
     try {
       const strings = getUiStrings(sourceLangRef.current.code);
       downloadTranscriptHtml(cardsRef.current, {
@@ -1119,7 +1168,7 @@ export function useLikeParrotController(): LikeParrotController {
       console.warn('[Transcript] HTML export failed:', error);
       setErrorMessage(getUiStrings(sourceLangRef.current.code).errors.saveHtmlFailed);
     }
-  }, []);
+  }, [isConnecting, isListening, isTranslating]);
 
   const handleToggleListening = useCallback(async () => {
     setErrorMessage(null);
@@ -1266,9 +1315,6 @@ export function useLikeParrotController(): LikeParrotController {
     }
     clearResumeTimer();
     SpeechService.stop();
-    if (activeProfileRef.current?.inputMethod === 'desktop_web_speech') {
-      recognizerRef.current?.suspendForPlayback();
-    }
     setPlayingCardId(card.id);
     setIsSpeaking(true);
     SpeechService.speak(
@@ -1393,6 +1439,12 @@ export function useLikeParrotController(): LikeParrotController {
     interimText,
     isTranslating,
     streamingTranslation,
+    canExport: isTranscriptExportReady({
+      cards,
+      isListening,
+      isConnecting,
+      isTranslating,
+    }),
     play: handlePlayCard,
     stop: handleStopCard,
     delete: handleDeleteCard,
@@ -1404,6 +1456,8 @@ export function useLikeParrotController(): LikeParrotController {
     handlePlayCard,
     handleStopCard,
     interimText,
+    isConnecting,
+    isListening,
     isTranslating,
     playingCardId,
     streamingTranslation,

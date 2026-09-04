@@ -1,10 +1,7 @@
 import { BergamotTranslator } from './bergamotTranslator';
 import { BuiltInTranslator } from './builtInTranslator';
+import { requestNetworkTranslation } from './networkTranslationClient';
 import type { PipelineEngineType, Stage2Option } from '../types';
-
-const FAST_GEMINI_MODEL = 'gemini-3.5-flash-lite';
-const GEMINI_REQUEST_TIMEOUT_MS = 10_000;
-const AZURE_REQUEST_TIMEOUT_MS = 8_000;
 
 export interface AzureTranslatorCredentials {
   apiKey: string;
@@ -149,6 +146,9 @@ export class TranslationService {
 
     if (shouldTryBergamot) {
       try {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
         const translatedText = await BergamotTranslator.translate(
           cleanText,
           sourceCode,
@@ -246,54 +246,25 @@ export class TranslationService {
     region?: string,
     signal?: AbortSignal
   ): Promise<string> {
-    const requestController = new AbortController();
-    const forwardAbort = () => requestController.abort(signal?.reason);
-    signal?.addEventListener('abort', forwardAbort, { once: true });
-    const timeoutId = window.setTimeout(
-      () => requestController.abort(new DOMException('Azure request timed out', 'TimeoutError')),
-      AZURE_REQUEST_TIMEOUT_MS
-    );
-    if (signal?.aborted) forwardAbort();
-
     try {
-      const query = new URLSearchParams({
-        from: sourceCode,
-        to: targetCode,
+      return await requestNetworkTranslation({
+        engine: 'azure',
+        text,
+        sourceCode,
+        targetCode,
+        apiKey,
+        region,
+        signal,
       });
-      if (region?.trim()) query.set('region', region.trim());
-      const response = await fetch(`/api/azure-translate?${query.toString()}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        signal: requestController.signal,
-        body: JSON.stringify([{ Text: text }]),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = typeof payload?.message === 'string' ? `: ${payload.message}` : '';
-        throw new TranslationError(
-          `Azure Translator request failed (${response.status})${detail}`,
-          true
-        );
-      }
-      const translatedText = typeof payload?.translatedText === 'string'
-        ? payload.translatedText.trim()
-        : '';
-      if (!translatedText) {
-        throw new TranslationError('Azure Translator returned no translation.', true);
-      }
-      return translatedText;
     } catch (error) {
-      if (signal?.aborted) throw error;
-      if (requestController.signal.aborted) {
-        throw new TranslationError('The Azure Translator request timed out.', true);
-      }
-      throw error;
-    } finally {
-      window.clearTimeout(timeoutId);
-      signal?.removeEventListener('abort', forwardAbort);
+      if (signal?.aborted || isAbortError(error)) throw error;
+      const allowFallback = error instanceof TranslationError
+        ? error.allowFallback
+        : (error as { allowFallback?: boolean }).allowFallback !== false;
+      throw new TranslationError(
+        error instanceof Error ? error.message : 'Azure Translator failed.',
+        allowFallback
+      );
     }
   }
 
@@ -307,152 +278,38 @@ export class TranslationService {
     onClauseReady?: (clause: string) => void,
     signal?: AbortSignal
   ): Promise<TranslationResult | null> {
-    // AbortSignal.any() is absent in older Safari versions that still support
-    // the rest of this app. Combine the caller and deadline manually.
-    const requestController = new AbortController();
-    let timedOut = false;
-    const forwardAbort = () => requestController.abort(signal?.reason);
-    signal?.addEventListener('abort', forwardAbort, { once: true });
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-      requestController.abort(new DOMException('Gemini request timed out', 'TimeoutError'));
-    }, GEMINI_REQUEST_TIMEOUT_MS);
-    if (signal?.aborted) forwardAbort();
-    const requestSignal = requestController.signal;
-
+    let clauseBuffer = '';
     try {
-      const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/${FAST_GEMINI_MODEL}` +
-        ':streamGenerateContent?alt=sse';
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey,
-          },
-          signal: requestSignal,
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [
-                {
-                  text:
-                    `Translate spoken ${sourceLang} directly into natural, conversational ${targetLang}. ` +
-                    'Return only the translation with no notes, labels, quotation marks, or explanation.',
-                },
-              ],
-            },
-            contents: [{ parts: [{ text }] }],
-            generationConfig: {
-              maxOutputTokens: 512,
-              thinkingConfig: { thinkingLevel: 'minimal' },
-            },
-          }),
-        });
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        if (timedOut) {
-          throw new TranslationError('The Gemini translation request timed out.', true);
-        }
-        throw error;
-      }
-
-      if (!response.ok) {
-        let detail = '';
-        try {
-          const body = await response.json();
-          detail = body?.error?.message ? `: ${body.error.message}` : '';
-        } catch {}
-        throw new TranslationError(`Gemini translation request failed (${response.status})${detail}`, true);
-      }
-      if (!response.body) throw new TranslationError('The Gemini streaming response has no body.', true);
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let sseBuffer = '';
-      let accumulated = '';
-      let clauseBuffer = '';
-      let finishReason: string | null = null;
-
-      const handleEventLine = (line: string) => {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) return;
-        const payload = trimmed.slice(5).trimStart();
-        if (!payload || payload === '[DONE]') return;
-
-        try {
-          const data = JSON.parse(payload);
-          const candidate = data?.candidates?.[0];
-          if (typeof candidate?.finishReason === 'string') finishReason = candidate.finishReason;
-          const parts = candidate?.content?.parts;
-          if (!Array.isArray(parts)) return;
-          const textPart = parts
-            .map((part: { text?: string; thought?: boolean }) => (part.thought ? '' : part.text ?? ''))
-            .join('');
-          if (!textPart) return;
-
-          accumulated += textPart;
-          clauseBuffer += textPart;
-          onChunk?.(textPart, accumulated);
+      const translatedText = await requestNetworkTranslation({
+        engine: 'gemini',
+        text,
+        sourceLang,
+        targetLang,
+        apiKey,
+        signal,
+        onChunk: (chunk, accumulated) => {
+          onChunk?.(chunk, accumulated);
+          clauseBuffer += chunk;
           clauseBuffer = flushReadyClauses(clauseBuffer, onClauseReady, false);
-        } catch {
-          // A malformed event is ignored; the next complete SSE event remains usable.
-        }
-      };
-
-      try {
-        while (true) {
-          throwIfAborted(requestSignal);
-          const { done, value } = await reader.read();
-          if (done) break;
-          sseBuffer += decoder.decode(value, { stream: true });
-          const lines = sseBuffer.split(/\r?\n/u);
-          sseBuffer = lines.pop() ?? '';
-          for (const line of lines) handleEventLine(line);
-        }
-        sseBuffer += decoder.decode();
-        if (sseBuffer.trim()) handleEventLine(sseBuffer);
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        if (timedOut) {
-          throw new TranslationError(
-            accumulated.trim()
-              ? 'The Gemini translation stream timed out mid-response. Please speak again.'
-              : 'The Gemini translation request timed out.',
-            !accumulated.trim()
-          );
-        }
-        if (isAbortError(error)) throw error;
-        if (accumulated.trim()) {
-          throw new TranslationError('The Gemini translation stream ended mid-response. Please speak again.');
-        }
-        throw error;
-      } finally {
-        reader.releaseLock();
-      }
-
-      if (finishReason !== 'STOP') {
-        const reasonLabel = finishReason ?? 'response ended early';
-        throw new TranslationError(
-          `Gemini translation did not complete normally (${reasonLabel}). Please speak again.`,
-          !accumulated.trim()
-        );
-      }
-
-      const translatedText = accumulated.trim();
-      if (!translatedText) return null;
+        },
+      });
+      if (!translatedText.trim()) return null;
       flushReadyClauses(clauseBuffer, onClauseReady, true);
-
       return {
         translatedText,
         engineName: '🌊 Gemini 3.5 Flash-Lite (live streaming)',
         engineType: 'gemini_stream',
         latencyMs: Math.round(performance.now() - startTime),
       };
-    } finally {
-      window.clearTimeout(timeoutId);
-      signal?.removeEventListener('abort', forwardAbort);
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error)) throw error;
+      const allowFallback = error instanceof TranslationError
+        ? error.allowFallback
+        : (error as { allowFallback?: boolean }).allowFallback !== false;
+      throw new TranslationError(
+        error instanceof Error ? error.message : 'Gemini translation failed.',
+        allowFallback
+      );
     }
   }
 }

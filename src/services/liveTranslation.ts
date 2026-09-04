@@ -1,8 +1,10 @@
 export type LiveStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 export interface LiveTranslationTurn {
+  id: string;
   sourceText: string;
   translatedText: string;
+  translationStatus: 'pending' | 'complete' | 'failed';
   sourceLanguageCode: string;
   targetLanguageCode: string;
   /** Approximate local-speech-start-to-first-output latency, not network RTT. */

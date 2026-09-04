@@ -1,3 +1,6 @@
+import { synthesizeAzureSpeech } from './azureSpeechTts';
+import { TranslatedAudioPlayer } from './translatedAudioPlayer';
+
 interface SpeechQueueItem {
   text: string;
   langCode: string;
@@ -19,6 +22,14 @@ export class SpeechService {
   private static activeQueueItem: SpeechQueueItem | null = null;
   private static finishActiveQueueItem: (() => void) | null = null;
   private static watchdogTimer: number | null = null;
+  private static azureSpeechKey = '';
+  private static azureSpeechRegion = '';
+  private static queueProcessing = false;
+
+  public static configureAzureSpeech(apiKey: string, region: string): void {
+    this.azureSpeechKey = apiKey.trim();
+    this.azureSpeechRegion = region.trim();
+  }
 
   static {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -81,65 +92,19 @@ export class SpeechService {
   ): void {
     const cleanText = text.trim();
     this.stop();
-    const generation = this.generation;
-
     if (!cleanText) {
       onEnd?.();
       return;
     }
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      const error = new Error('This browser does not support text-to-speech.');
-      onError?.(error);
-      onEnd?.();
-      return;
-    }
-
-    // Chromium can discard an utterance queued in the same task as cancel().
-    this.pendingTimer = window.setTimeout(() => {
-      this.pendingTimer = null;
-      if (generation !== this.generation) return;
-
-      try {
-        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-        const utterance = this.createUtterance(cleanText, langCode, 1);
-        this.activeUtterance = utterance;
-        let completed = false;
-        const finish = (error?: unknown) => {
-          if (completed) return;
-          completed = true;
-          if (generation !== this.generation) return;
-          this.clearWatchdog();
-          this.activeUtterance = null;
-          if (error) onError?.(error);
-          onEnd?.();
-        };
-
-        utterance.onstart = () => {
-          if (generation === this.generation) onStart?.();
-        };
-        utterance.onend = () => finish();
-        utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-          if (event.error === 'canceled' || event.error === 'interrupted') {
-            finish();
-          } else {
-            finish(event);
-          }
-        };
-        this.armWatchdog(cleanText, () => {
-          try {
-            window.speechSynthesis.cancel();
-          } catch {}
-          finish(new Error('TTS did not report completion, so playback was stopped.'));
-        });
-        window.speechSynthesis.speak(utterance);
-      } catch (error) {
-        if (generation !== this.generation) return;
-        this.clearWatchdog();
-        this.activeUtterance = null;
-        onError?.(error);
-        onEnd?.();
-      }
-    }, 50);
+    this.speechQueue.push({
+      text: cleanText,
+      langCode,
+      generation: this.generation,
+      onStart,
+      onEnd,
+      onError,
+    });
+    this.processQueue();
   }
 
   public static enqueueChunk(
@@ -162,85 +127,125 @@ export class SpeechService {
       groupId,
     };
     this.speechQueue.push(item);
-    if (!this.isQueueRunning) this.processQueue();
+    this.processQueue();
   }
 
   private static processQueue(): void {
-    const item = this.speechQueue.shift();
-    if (!item) {
-      this.isQueueRunning = false;
-      this.activeUtterance = null;
+    if (this.queueProcessing) return;
+    void this.processQueueAsync();
+  }
+
+  private static async processQueueAsync(): Promise<void> {
+    if (this.queueProcessing) return;
+    this.queueProcessing = true;
+    this.isQueueRunning = true;
+    try {
+      while (this.speechQueue.length > 0) {
+        const item = this.speechQueue.shift();
+        if (!item) break;
+        if (item.generation !== this.generation) continue;
+        this.activeQueueItem = item;
+        await this.playItem(item);
+        this.activeQueueItem = null;
+      }
+    } finally {
+      this.queueProcessing = false;
+      this.isQueueRunning = this.speechQueue.length > 0;
       this.activeQueueItem = null;
       this.finishActiveQueueItem = null;
-      return;
+      if (this.speechQueue.length > 0) this.processQueue();
     }
-    if (item.generation !== this.generation) {
-      this.processQueue();
-      return;
-    }
+  }
 
-    this.isQueueRunning = true;
-    this.activeQueueItem = item;
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      const error = new Error('This browser does not support text-to-speech.');
-      item.onError?.(error);
-      item.onEnd?.();
-      this.processQueue();
-      return;
-    }
-
-    try {
-      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-      const utterance = this.createUtterance(item.text, item.langCode, 1.05);
-      this.activeUtterance = utterance;
-      let completed = false;
-      const finish = (error?: unknown, deferNext = false) => {
-        if (completed) return;
-        completed = true;
-        if (item.generation !== this.generation) return;
-        this.clearWatchdog();
-        this.activeUtterance = null;
-        this.activeQueueItem = null;
-        this.finishActiveQueueItem = null;
-        const speechError = typeof error === 'object' && error !== null && 'error' in error
-          ? String((error as { error?: unknown }).error ?? '')
-          : '';
-        if (error && speechError !== 'canceled' && speechError !== 'interrupted') {
-          item.onError?.(error);
+  /**
+   * Prefer Azure Speech → AudioContext so listening can continue. Fall back to
+   * device speechSynthesis only when no Speech credentials are saved.
+   */
+  private static async playItem(item: SpeechQueueItem): Promise<void> {
+    if (this.azureSpeechKey && this.azureSpeechRegion) {
+      try {
+        const audio = await synthesizeAzureSpeech(
+          item.text,
+          item.langCode,
+          this.azureSpeechKey,
+          this.azureSpeechRegion
+        );
+        if (item.generation !== this.generation) {
+          item.onEnd?.();
+          return;
         }
+        await TranslatedAudioPlayer.enqueue(
+          audio,
+          item.onStart,
+          item.onEnd,
+          item.onError
+        );
+        return;
+      } catch (error) {
+        if (item.generation !== this.generation) {
+          item.onEnd?.();
+          return;
+        }
+        console.warn('[Speech] Azure Speech TTS failed, using device voice:', error);
+      }
+    }
+    await this.playWithDeviceVoice(item);
+  }
+
+  private static playWithDeviceVoice(item: SpeechQueueItem): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        const error = new Error('This browser does not support text-to-speech.');
+        item.onError?.(error);
         item.onEnd?.();
-        if (deferNext) {
-          this.queueResumeTimer = window.setTimeout(() => {
-            this.queueResumeTimer = null;
-            this.processQueue();
-          }, 50);
-        } else {
-          this.processQueue();
-        }
-      };
-      this.finishActiveQueueItem = () => finish(undefined, true);
-
-      utterance.onstart = () => {
-        if (item.generation === this.generation) item.onStart?.();
-      };
-      utterance.onend = () => finish();
-      utterance.onerror = (event: SpeechSynthesisErrorEvent) => finish(event);
-      this.armWatchdog(item.text, () => {
-        try {
-          window.speechSynthesis.cancel();
-        } catch {}
-        finish(new Error('TTS did not report completion. Moving to the next phrase.'), true);
-      });
-      window.speechSynthesis.speak(utterance);
-    } catch (error) {
-      if (item.generation === this.generation) {
+        resolve();
+        return;
+      }
+      try {
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+        const utterance = this.createUtterance(item.text, item.langCode, 1.05);
+        this.activeUtterance = utterance;
+        let completed = false;
+        const finish = (error?: unknown) => {
+          if (completed) return;
+          completed = true;
+          if (item.generation !== this.generation) {
+            resolve();
+            return;
+          }
+          this.clearWatchdog();
+          this.activeUtterance = null;
+          this.finishActiveQueueItem = null;
+          const speechError = typeof error === 'object' && error !== null && 'error' in error
+            ? String((error as { error?: unknown }).error ?? '')
+            : '';
+          if (error && speechError !== 'canceled' && speechError !== 'interrupted') {
+            item.onError?.(error);
+          }
+          item.onEnd?.();
+          resolve();
+        };
+        this.finishActiveQueueItem = () => finish();
+        utterance.onstart = () => {
+          if (item.generation === this.generation) item.onStart?.();
+        };
+        utterance.onend = () => finish();
+        utterance.onerror = (event: SpeechSynthesisErrorEvent) => finish(event);
+        this.armWatchdog(item.text, () => {
+          try {
+            window.speechSynthesis.cancel();
+          } catch {}
+          finish(new Error('TTS did not report completion. Moving to the next phrase.'));
+        });
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
         this.clearWatchdog();
         this.activeUtterance = null;
         item.onError?.(error);
         item.onEnd?.();
-        this.processQueue();
+        resolve();
       }
-    }
+    });
   }
 
   /** Remove only the queued/playing audio produced by one translation request. */
@@ -276,9 +281,11 @@ export class SpeechService {
     this.generation += 1;
     this.speechQueue = [];
     this.isQueueRunning = false;
+    this.queueProcessing = false;
     this.activeUtterance = null;
     this.activeQueueItem = null;
     this.finishActiveQueueItem = null;
+    TranslatedAudioPlayer.stop();
     this.clearWatchdog();
     if (this.pendingTimer !== null) {
       window.clearTimeout(this.pendingTimer);
@@ -302,6 +309,7 @@ export class SpeechService {
         this.activeUtterance ||
         this.isQueueRunning ||
         this.speechQueue.length > 0 ||
+        TranslatedAudioPlayer.isSpeaking() ||
         (typeof window !== 'undefined' &&
           'speechSynthesis' in window &&
           window.speechSynthesis.speaking)

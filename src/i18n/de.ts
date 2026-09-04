@@ -30,6 +30,7 @@ export const GERMAN_UI = createLocale('de-DE', {
     saveTranscript: 'Transkript als HTML speichern',
     saveTranscriptTitle: 'Gesprächstranskript als HTML speichern',
     noTranscriptToSave: 'Es gibt kein Transkript zum Speichern',
+    transcriptExportPending: 'Der Download ist verfügbar, sobald die Hintergrundübersetzung fertig ist',
     openSettings: 'Einstellungen öffnen',
     openSettingsNeedsKey: 'Einstellungen öffnen; dem ausgewählten Ablauf fehlt eine erforderliche Einstellung',
     settingsTitle: 'Einstellungen für Sprache, Anbieter-API-Schlüssel und Darstellung',

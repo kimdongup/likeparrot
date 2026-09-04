@@ -30,6 +30,7 @@ export const JAPANESE_UI = createLocale('ja-JP', {
     saveTranscript: '会話記録をHTMLで保存',
     saveTranscriptTitle: '会話の記録をHTMLファイルとして保存します',
     noTranscriptToSave: '保存できる会話記録がありません',
+    transcriptExportPending: 'バックグラウンド翻訳が終わると保存できます',
     openSettings: '設定を開く',
     openSettingsNeedsKey: '設定を開く（選択したライブプロバイダーのAPIキーが必要です）',
     settingsTitle: '言語、プロバイダーAPIキー、外観の設定',
