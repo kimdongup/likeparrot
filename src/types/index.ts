@@ -41,6 +41,7 @@ export interface LanguageOption {
 
 export type PipelineEngineType =
   | 'chrome_nano'
+  | 'bergamot'
   | 'gemini_stream'
   | 'gemini_live_ws'
   | 'network_fallback'
@@ -50,6 +51,7 @@ export type Stage1Option = 'webspeech_fast' | 'webspeech_std';
 export type Stage2Option =
   | 'auto'
   | 'chrome_nano'
+  | 'bergamot'
   | 'gemini_stream'
   | 'turbo_fastpath';
 export type Stage3Option = 'tts_pipelined' | 'tts_standard';

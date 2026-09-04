@@ -1,9 +1,46 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import basicSsl from '@vitejs/plugin-basic-ssl'
-import { defineConfig } from 'vite'
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { defineConfig, type Plugin } from 'vite'
+import { createReadStream, copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+const BERGAMOT_WORKER_DIR = resolve('node_modules/@browsermt/bergamot-translator/worker')
+const BERGAMOT_WORKER_FILES = [
+  'translator-worker.js',
+  'bergamot-translator-worker.js',
+  'bergamot-translator-worker.wasm',
+] as const
+
+const bergamotContentType = (fileName: string): string => {
+  if (fileName.endsWith('.wasm')) return 'application/wasm'
+  return 'text/javascript'
+}
+
+const serveBergamotWorkers = (): Plugin => ({
+  name: 'serve-bergamot-workers',
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const fileName = BERGAMOT_WORKER_FILES.find((name) => req.url?.split('?')[0] === `/bergamot/${name}`)
+      if (!fileName) {
+        next()
+        return
+      }
+      res.setHeader('Content-Type', bergamotContentType(fileName))
+      createReadStream(join(BERGAMOT_WORKER_DIR, fileName)).on('error', () => {
+        res.statusCode = 404
+        res.end('Not found')
+      }).pipe(res)
+    })
+  },
+  closeBundle() {
+    const destination = resolve('dist/bergamot')
+    mkdirSync(destination, { recursive: true })
+    for (const fileName of BERGAMOT_WORKER_FILES) {
+      copyFileSync(join(BERGAMOT_WORKER_DIR, fileName), join(destination, fileName))
+    }
+  },
+})
 
 const stampServiceWorker = () => ({
   name: 'stamp-service-worker-cache',
@@ -26,11 +63,22 @@ const stampServiceWorker = () => ({
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), basicSsl(), stampServiceWorker()],
+  plugins: [react(), tailwindcss(), basicSsl(), serveBergamotWorkers(), stampServiceWorker()],
+  optimizeDeps: {
+    include: ['microsoft-cognitiveservices-speech-sdk'],
+  },
   server: {
     host: true, // 모바일 및 로컬 네트워크 접속 허용
     port: 5173,
     proxy: {
+      '/api/bergamot-models': {
+        target: 'https://storage.googleapis.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(
+          /^\/api\/bergamot-models/,
+          '/moz-fx-translations-data--303e-prod-translations-data'
+        ),
+      },
       '/api/azure-translate': {
         target: 'https://api.cognitive.microsofttranslator.com',
         changeOrigin: true,

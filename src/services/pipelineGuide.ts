@@ -58,6 +58,15 @@ interface GuideCopy {
   };
 }
 
+const BERGAMOT_GUIDE: EngineGuideCopy = {
+  situation: 'Best on a phone or tablet PWA when you want translation without an API key.',
+  speed: 'The first language pair downloads a compact model; later sentences stay on-device.',
+  accuracy: 'Quality follows Firefox Translations models. Everyday phrases work well; names and CJK can be weaker than cloud engines.',
+  privacy: 'After the model download, source text is translated in the browser and is not sent to a translation provider.',
+  requirements: 'Requires WebAssembly workers, a secure page, and enough storage for the selected language pair.',
+  caution: 'The first download can take time on a mobile network. iOS Safari may run out of memory on some devices.',
+};
+
 const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
   en: {
     engines: {
@@ -77,6 +86,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Requires an eligible desktop Chrome, Edge, or Safari exposing the Translator API and a downloadable model for the selected language pair. Safari currently falls back because it does not expose this web API.',
         caution: 'It is not available on every browser, mobile device, or language pair, and the first model download can take time.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: 'Good for free conversation and longer sentences where context, idioms, and natural phrasing matter.',
         speed: 'Translation arrives as a stream, so completed phrases can be used before the full result is ready.',
@@ -146,6 +156,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Translator API를 실제 제공하는 데스크톱 Chrome·Edge·Safari 후보와 선택한 언어 조합용 모델이 필요합니다. 현재 Safari는 이 웹 API가 없어 클라우드로 넘어갑니다.',
         caution: '모든 브라우저, 모바일 기기, 언어 조합에서 사용할 수 있는 것은 아니며 최초 모델 다운로드에 시간이 걸릴 수 있습니다.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: '문맥, 관용 표현, 자연스러운 말투가 중요한 자유 대화와 긴 문장에 적합합니다.',
         speed: '번역이 스트림으로 도착하므로 전체 결과가 완성되기 전에 완료된 구절을 사용할 수 있습니다.',
@@ -215,6 +226,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: '組み込み Translator API に対応するデスクトップ版 Chrome と、選択した言語ペア用にダウンロード可能なモデルが必要です。',
         caution: 'すべてのブラウザ、モバイル端末、言語ペアで利用できるわけではなく、初回のモデル取得には時間がかかる場合があります。',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: '文脈、慣用表現、自然な言い回しが重要な自由会話や長い文に適しています。',
         speed: '翻訳がストリームで届くため、全体が完成する前に完了した句を利用できます。',
@@ -284,6 +296,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: '需要支援內建 Translator API 的桌面版 Chrome，以及可供所選語言組合下載的模型。',
         caution: '並非所有瀏覽器、行動裝置或語言組合都支援，首次下載模型也可能需要一些時間。',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: '適合重視語境、慣用語和自然措辭的自由對話與較長句子。',
         speed: '翻譯以串流方式送達，因此完整結果就緒前即可使用已完成的片語。',
@@ -353,6 +366,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: '需要支持内置 Translator API 的桌面版 Chrome，以及可为所选语言组合下载的模型。',
         caution: '并非所有浏览器、移动设备或语言组合都支持，首次下载模型也可能需要一些时间。',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: '适合重视语境、习语和自然措辞的自由对话与较长句子。',
         speed: '翻译以流式方式到达，因此完整结果就绪前即可使用已完成的短语。',
@@ -422,6 +436,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Requiere Chrome de escritorio con la Translator API integrada y un modelo descargable para el par de idiomas elegido.',
         caution: 'No está disponible en todos los navegadores, móviles o pares de idiomas, y la primera descarga del modelo puede tardar.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: 'Es adecuado para conversaciones libres y frases largas donde importan el contexto, los modismos y una expresión natural.',
         speed: 'La traducción llega como flujo, por lo que las frases terminadas pueden usarse antes de que esté listo el resultado completo.',
@@ -491,6 +506,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Nécessite Chrome pour ordinateur avec la Translator API intégrée et un modèle téléchargeable pour la paire de langues choisie.',
         caution: 'Cette option n’est pas disponible sur tous les navigateurs, appareils mobiles ou paires de langues, et le premier téléchargement peut prendre du temps.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: 'Adapté aux conversations libres et aux phrases longues où le contexte, les expressions idiomatiques et le naturel comptent.',
         speed: 'La traduction arrive sous forme de flux, ce qui permet d’utiliser les segments terminés avant que le résultat complet soit prêt.',
@@ -560,6 +576,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Erfordert Desktop-Chrome mit integrierter Translator API und ein herunterladbares Modell für das ausgewählte Sprachpaar.',
         caution: 'Nicht für jeden Browser, jedes Mobilgerät oder Sprachpaar verfügbar; auch der erste Modelldownload kann dauern.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: 'Geeignet für freie Gespräche und längere Sätze, bei denen Kontext, Redewendungen und natürliche Formulierungen wichtig sind.',
         speed: 'Die Übersetzung trifft als Stream ein, sodass fertige Abschnitte schon vor dem vollständigen Ergebnis verwendet werden können.',
@@ -629,6 +646,7 @@ const GUIDE_COPY: Record<GuideLanguage, GuideCopy> = {
         requirements: 'Cần Chrome máy tính có Translator API tích hợp và mô hình có thể tải xuống cho cặp ngôn ngữ đã chọn.',
         caution: 'Không khả dụng trên mọi trình duyệt, thiết bị di động hoặc cặp ngôn ngữ; lần tải mô hình đầu tiên cũng có thể mất thời gian.',
       },
+      bergamot: BERGAMOT_GUIDE,
       gemini_stream: {
         situation: 'Phù hợp với hội thoại tự do và câu dài, nơi ngữ cảnh, thành ngữ và cách diễn đạt tự nhiên rất quan trọng.',
         speed: 'Bản dịch đến dưới dạng luồng nên có thể dùng các cụm đã hoàn tất trước khi có toàn bộ kết quả.',
@@ -723,6 +741,7 @@ export const getPipelineCombinationGuide = (
   const stage2Labels: Record<Stage2Option, string> = {
     auto: ui.pipeline.automaticRouting,
     chrome_nano: ui.pipeline.chromeTranslator,
+    bergamot: ui.pipeline.bergamotTranslator,
     gemini_stream: ui.pipeline.geminiStream,
     turbo_fastpath: ui.pipeline.networkFallback,
   };

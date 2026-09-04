@@ -44,6 +44,7 @@ const localizePipelineTag = (pipelineTag: string | undefined, strings: UiStrings
   const normalized = normalizePipelineTag(pipelineTag);
   if (!normalized) return '';
   if (normalized.includes('Chrome built-in Translator')) return strings.pipeline.chromeTranslator;
+  if (normalized.includes('Bergamot on-device translator')) return strings.pipeline.bergamotTranslator;
   if (normalized.includes('Network translation fallback')) return strings.pipeline.networkFallback;
   if (normalized.includes('Gemini 3.5 Flash-Lite')) return strings.pipeline.geminiStream;
   return normalized;

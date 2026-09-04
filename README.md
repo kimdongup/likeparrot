@@ -7,16 +7,18 @@
 | 워크플로 | 경로 | 처리 흐름 | 적합한 상황 |
 | --- | --- | --- | --- |
 | **자동 경로 선택** | `/` | 기기와 브라우저 기능, 저장된 API 키, 클라우드 대체 설정을 확인해 가능한 워크플로 하나를 선택 | 사용자가 매번 조합을 판단하지 않아도 되는 기본 경로 |
-| **실시간 오디오** | `/` | Gemini Live WebSocket 또는 OpenAI Realtime WebRTC → 번역 음성 + 입·출력 전사 | 첫 음성이 중요한 실시간 회화 |
+| **실시간 오디오** | `/` | Gemini Live WebSocket, OpenAI Realtime WebRTC, Azure Speech Live Interpreter, Azure Speech Translation → 번역 음성 + 입·출력 전사 | 첫 음성이 중요한 실시간 회화 |
 | **데스크탑 텍스트** | `/` | 데스크탑 Web Speech → 원문 먼저 저장 → Chrome 기기 내 번역 또는 Gemini/Azure 텍스트 번역 → 기본 TTS | 원문과 번역문을 확인하며 학습하는 경우 |
-| **모바일 키보드** | `/` | 모바일 기본 키보드 받아쓰기 또는 입력 → 원문 먼저 저장 → Gemini/Azure 텍스트 번역 → 기본 TTS | 모바일 Chrome/Safari에서 말끝 감지가 불안정할 때 |
+| **모바일 키보드** | `/` | 모바일 기본 키보드 받아쓰기 또는 입력 → 원문 먼저 저장 → Bergamot 기기 내 번역 또는 Gemini/Azure 텍스트 번역 → 기본 TTS | 모바일 Chrome/Safari에서 말끝 감지가 불안정할 때 |
 | **요금 안내** | `/billingplan` | 실제 앱 경로별 시간·음성 비율 → 예상 USD/KRW 비용 | 공급자·무료 대안·안전장치 비교 |
 
 `/all_in_one`은 이전 버전 링크 호환을 위해 `/`로 자동 이동합니다.
 
 ### 실시간 오디오 워크플로
 
-엔진 선택 메뉴에서 Gemini 3.5 Live Translate 또는 OpenAI `gpt-realtime-translate`를 고릅니다. 두 엔진 모두 마이크 오디오를 보내고 번역 음성을 바로 받아 재생하므로 Web Speech STT, REST 번역, 브라우저 TTS를 별도 단계로 거치지 않습니다. 서버에서 받은 입력·출력 전사는 같은 터미널형 스크립트에 기록됩니다.
+엔진 선택 메뉴에서 Gemini 3.5 Live Translate, OpenAI `gpt-realtime-translate`, Azure Speech Live Interpreter, Azure Speech Translation을 고릅니다. 마이크 오디오를 보내고 번역 음성을 바로 받아 재생하므로 Web Speech STT, REST 번역, 브라우저 TTS를 별도 단계로 거치지 않습니다. 세션이 제공한 입력·출력 전사는 같은 터미널형 스크립트에 기록됩니다.
+
+Azure Speech 경로는 Translator 키가 아니라 Speech 리소스 키와 지역이 필요합니다. 설정 → Azure API에서 Speech 키·지역을 저장하고, Live Interpreter는 리소스 이름도 권장합니다. Live Interpreter는 입력 언어를 자동 감지하며 원문 전사를 제공하지 않을 수 있습니다. 표준 Speech Translation은 선택한 입력 언어로 인식하고 원문 전사와 합성된 대상 언어 음성을 함께 반환합니다. Speech 키는 브라우저에서 Speech SDK WebSocket으로 Azure에 전달됩니다.
 
 Live Translate는 목표 언어를 설정하고 입력 언어를 자동 감지합니다. 화면의 입력 언어 선택값은 사용자가 기대하는 언어와 기록 메타데이터에 사용됩니다.
 
@@ -32,12 +34,13 @@ OpenAI 경로는 브라우저 WebRTC를 사용합니다. 설정에 넣은 개인
 - **데스크탑 Chrome 기기 내 번역 - 안정형:** 같은 경로이며 공백만 약 1.5초, 문장 3~4개 정도를 모음
 - **데스크탑 Web Speech + Gemini 3.5 Flash-Lite:** 원문 저장 후 Gemini 텍스트 번역, 기본 TTS
 - **데스크탑 Web Speech + Azure AI Translator:** 원문 저장 후 Azure 텍스트 번역, 기본 TTS
+- **모바일 키보드 받아쓰기 + Bergamot:** 사용자가 키보드 마이크로 텍스트를 만든 뒤 Firefox 번역 모델로 기기 내 번역, 기본 TTS. 언어쌍 모델을 처음 받을 때만 네트워크가 필요합니다
 - **모바일 키보드 받아쓰기 + Gemini 3.5 Flash-Lite:** 사용자가 키보드 마이크로 텍스트를 만든 뒤 Gemini 번역, 기본 TTS
 - **모바일 키보드 받아쓰기 + Azure AI Translator:** 사용자가 키보드 마이크로 텍스트를 만든 뒤 Azure 번역, 기본 TTS
 
 텍스트 워크플로는 번역 전에 원문 기록을 먼저 저장하고, 같은 기록의 상태만 `번역 중`, `실패`, `완료`로 갱신합니다. 따라서 번역 실패나 세션 중단이 있어도 사용자가 말한 원문은 사라지지 않습니다.
 
-자동 경로 선택은 데스크탑 Chrome 기기 내 번역을 우선합니다. 클라우드 대체는 설정에서 명시적으로 켜야만 자동 선택에 포함되며, 단순히 API 키를 저장했다고 해서 자동으로 원문이 네트워크 제공자에게 전송되지는 않습니다. 모바일에서는 PWA가 OS 받아쓰기를 직접 시작할 수 없으므로 실제 텍스트 입력칸을 보여 주고, 사용자가 키보드 마이크 또는 타이핑으로 만든 텍스트만 앱이 처리합니다.
+자동 경로 선택은 데스크탑 Chrome 기기 내 번역을 우선합니다. 모바일 자동 경로는 Bergamot 기기 내 번역을 우선하고, 클라우드 대체가 켜져 있을 때만 Gemini 또는 Azure를 씁니다. 단순히 API 키를 저장했다고 해서 자동으로 원문이 네트워크 제공자에게 전송되지는 않습니다. 모바일에서는 PWA가 OS 받아쓰기를 직접 시작할 수 없으므로 실제 텍스트 입력칸을 보여 주고, 사용자가 키보드 마이크 또는 타이핑으로 만든 텍스트만 앱이 처리합니다.
 
 ## 터미널형 스크립트
 
@@ -133,6 +136,8 @@ UI 컴포넌트는 렌더링과 사용자 입력을 담당하고, 재사용 가�
 - `src/hooks/useLikeParrotController.ts`: 화면과 분리된 앱 상태·라우팅·음성 워크플로 조정
 - `src/services/geminiLiveSocket.ts`: Gemini Live WebSocket·오디오 세션
 - `src/services/openAiRealtimeTranslation.ts`: OpenAI WebRTC 통역 세션
+- `src/services/azureSpeechLiveTranslation.ts`: Azure Speech Live Interpreter·Speech Translation 세션
+- `src/services/bergamotTranslator.ts`: 모바일 Bergamot WASM 번역과 Firefox 언어쌍 모델 캐시
 - `src/services/costEstimator.ts`: 공급자별 순수 비용 계산 로직
 - `src/services/workflowProfiles.ts`: 워크플로 조합, 요구 기능, 자동 경로 선택 규칙
 - `src/services/workflowPresentation.ts`: 워크플로 표시 문구와 다국어 설명

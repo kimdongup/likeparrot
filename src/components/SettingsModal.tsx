@@ -25,11 +25,16 @@ interface SettingsModalProps {
   azureApiKey: string;
   azureRegion: string;
   rememberAzureApiKey: boolean;
+  azureSpeechApiKey: string;
+  azureSpeechRegion: string;
+  azureSpeechResource: string;
+  rememberAzureSpeechApiKey: boolean;
   onSaveApiKey: (
     provider: ApiKeyProvider,
     apiKey: string,
     rememberOnDevice: boolean,
-    auxiliaryValue?: string
+    auxiliaryValue?: string,
+    extraAuxiliaryValue?: string
   ) => ActionResult;
   onDeleteApiKey: (provider: ApiKeyProvider) => ActionResult;
   automaticRoutingPreference: AutomaticRoutingPreference;
@@ -58,6 +63,10 @@ function SettingsDialog({
   azureApiKey,
   azureRegion,
   rememberAzureApiKey,
+  azureSpeechApiKey,
+  azureSpeechRegion,
+  azureSpeechResource,
+  rememberAzureSpeechApiKey,
   onSaveApiKey,
   onDeleteApiKey,
   automaticRoutingPreference,
@@ -298,6 +307,44 @@ function SettingsDialog({
                 onSave={(key, remember, region) => onSaveApiKey('azure', key, remember, region)}
                 onDelete={() => onDeleteApiKey('azure')}
               />
+              <div className="mt-8 border-t border-slate-800 pt-6 [[data-theme=light]_&]:border-slate-200">
+                <ApiKeySettingsPanel
+                  provider="azureSpeech"
+                  apiKey={azureSpeechApiKey}
+                  rememberApiKey={rememberAzureSpeechApiKey}
+                  title={t.settings.azureSpeechApiKey}
+                  description={t.settings.azureSpeechApiDescription}
+                  inputLabel={t.settings.azureSpeechApiInputLabel}
+                  placeholder="Azure Speech key"
+                  auxiliaryInput={{
+                    value: azureSpeechRegion,
+                    label: t.settings.azureSpeechRegion,
+                    placeholder: 'eastus',
+                    hint: t.settings.azureSpeechRegionHint,
+                    required: true,
+                  }}
+                  extraAuxiliaryInput={{
+                    value: azureSpeechResource,
+                    label: t.settings.azureSpeechResource,
+                    placeholder: 'my-speech-resource',
+                    hint: t.settings.azureSpeechResourceHint,
+                  }}
+                  helpTitle={t.settings.azureSpeechHowToGetKey}
+                  helpSteps={[
+                    t.settings.azureSpeechApiStep1,
+                    t.settings.azureSpeechApiStep2,
+                    t.settings.azureSpeechApiStep3,
+                  ]}
+                  createKeyLabel={t.settings.createAzureSpeechKey}
+                  createKeyUrl="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/SpeechServices"
+                  securityNotice={t.settings.azureSpeechTokenNotice}
+                  t={t}
+                  onSave={(key, remember, region, resourceName) =>
+                    onSaveApiKey('azureSpeech', key, remember, region, resourceName)
+                  }
+                  onDelete={() => onDeleteApiKey('azureSpeech')}
+                />
+              </div>
             </div>
 
             <div id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" hidden={section !== 'appearance'}>

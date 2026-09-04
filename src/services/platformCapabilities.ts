@@ -23,6 +23,7 @@ export interface PlatformDetectionInput {
   hasSpeechSynthesis: boolean;
   hasEditableText: boolean;
   hasVirtualKeyboardApi: boolean;
+  hasWebAssemblyWorkers: boolean;
 }
 
 export interface PlatformCapabilities {
@@ -42,6 +43,7 @@ export interface PlatformCapabilities {
   supportsSpeechSynthesis: boolean;
   supportsEditableText: boolean;
   supportsVirtualKeyboardApi: boolean;
+  supportsWebAssembly: boolean;
 }
 
 const detectBrowserFamily = (
@@ -92,6 +94,7 @@ export const derivePlatformCapabilities = (
     supportsSpeechSynthesis: input.hasSpeechSynthesis,
     supportsEditableText: input.hasEditableText,
     supportsVirtualKeyboardApi: input.hasVirtualKeyboardApi,
+    supportsWebAssembly: input.hasWebAssemblyWorkers,
   };
 };
 
@@ -148,5 +151,8 @@ export const detectPlatformCapabilities = (): PlatformCapabilities => {
     hasSpeechSynthesis: Boolean(extendedWindow && 'speechSynthesis' in extendedWindow),
     hasEditableText: typeof browserDocument?.createElement === 'function',
     hasVirtualKeyboardApi: Boolean(extendedNavigator?.virtualKeyboard),
+    hasWebAssemblyWorkers: typeof extendedWindow?.Worker === 'function'
+      && typeof extendedWindow?.WebAssembly === 'object'
+      && typeof extendedWindow?.DecompressionStream === 'function',
   });
 };

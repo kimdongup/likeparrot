@@ -14,7 +14,7 @@ export interface ApiKeyReadResult {
   persistent: boolean;
 }
 
-export type ApiKeyProvider = 'gemini' | 'openai' | 'azure';
+export type ApiKeyProvider = 'gemini' | 'openai' | 'azure' | 'azureSpeech';
 export type CloudTranslationProvider = Extract<ApiKeyProvider, 'gemini' | 'azure'>;
 
 export interface AutomaticRoutingPreference {
@@ -27,6 +27,9 @@ export const GEMINI_API_KEY_STORAGE_KEY = 'likeparrot_api_key';
 export const OPENAI_API_KEY_STORAGE_KEY = 'likeparrot_openai_api_key';
 export const AZURE_API_KEY_STORAGE_KEY = 'likeparrot_azure_api_key';
 export const AZURE_REGION_STORAGE_KEY = 'likeparrot_azure_region';
+export const AZURE_SPEECH_API_KEY_STORAGE_KEY = 'likeparrot_azure_speech_api_key';
+export const AZURE_SPEECH_REGION_STORAGE_KEY = 'likeparrot_azure_speech_region';
+export const AZURE_SPEECH_RESOURCE_STORAGE_KEY = 'likeparrot_azure_speech_resource';
 export const API_KEY_STORAGE_KEY = GEMINI_API_KEY_STORAGE_KEY;
 export const THEME_STORAGE_KEY = 'likeparrot_theme';
 export const WORKFLOW_PROFILE_STORAGE_KEY = 'likeparrot_workflow_profile';
@@ -36,6 +39,7 @@ export const PREFERRED_CLOUD_PROVIDER_STORAGE_KEY = 'likeparrot_preferred_cloud_
 const getApiKeyStorageKey = (provider: ApiKeyProvider): string => {
   if (provider === 'openai') return OPENAI_API_KEY_STORAGE_KEY;
   if (provider === 'azure') return AZURE_API_KEY_STORAGE_KEY;
+  if (provider === 'azureSpeech') return AZURE_SPEECH_API_KEY_STORAGE_KEY;
   return GEMINI_API_KEY_STORAGE_KEY;
 };
 
@@ -192,6 +196,36 @@ const deleteStoredValue = (storageKey: string): PreferenceStorageStatus => {
 
 export const deleteStoredAzureRegion = (): PreferenceStorageStatus =>
   deleteStoredValue(AZURE_REGION_STORAGE_KEY);
+
+export const readStoredAzureSpeechRegion = (): ApiKeyReadResult =>
+  readStoredValue(AZURE_SPEECH_REGION_STORAGE_KEY);
+
+export const saveStoredAzureSpeechRegion = (
+  region: string,
+  persistent = false
+): PreferenceStorageStatus => {
+  const cleanRegion = region.trim().toLowerCase();
+  if (!cleanRegion) return deleteStoredValue(AZURE_SPEECH_REGION_STORAGE_KEY);
+  return saveStoredValue(AZURE_SPEECH_REGION_STORAGE_KEY, cleanRegion, persistent);
+};
+
+export const deleteStoredAzureSpeechRegion = (): PreferenceStorageStatus =>
+  deleteStoredValue(AZURE_SPEECH_REGION_STORAGE_KEY);
+
+export const readStoredAzureSpeechResource = (): ApiKeyReadResult =>
+  readStoredValue(AZURE_SPEECH_RESOURCE_STORAGE_KEY);
+
+export const saveStoredAzureSpeechResource = (
+  resourceName: string,
+  persistent = false
+): PreferenceStorageStatus => {
+  const cleanName = resourceName.trim();
+  if (!cleanName) return deleteStoredValue(AZURE_SPEECH_RESOURCE_STORAGE_KEY);
+  return saveStoredValue(AZURE_SPEECH_RESOURCE_STORAGE_KEY, cleanName, persistent);
+};
+
+export const deleteStoredAzureSpeechResource = (): PreferenceStorageStatus =>
+  deleteStoredValue(AZURE_SPEECH_RESOURCE_STORAGE_KEY);
 
 /** Backwards-compatible Gemini helpers used by the Text First pipeline. */
 export const readStoredApiKey = (): ApiKeyReadResult => readStoredProviderApiKey('gemini');

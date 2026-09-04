@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { getUiStrings } from '../constants/translations';
+import { BergamotTranslator } from '../services/bergamotTranslator';
 import { BuiltInTranslator } from '../services/builtInTranslator';
 import { GeminiLiveSocketService } from '../services/geminiLiveSocket';
 import {
@@ -9,18 +10,25 @@ import {
 } from '../services/liveTranslation';
 import { OpenAIRealtimeTranslationService } from '../services/openAiRealtimeTranslation';
 import { detectPlatformCapabilities } from '../services/platformCapabilities';
+import { AzureSpeechLiveTranslationService } from '../services/azureSpeechLiveTranslation';
 import {
   applyThemePreference,
   deleteStoredAzureRegion,
+  deleteStoredAzureSpeechRegion,
+  deleteStoredAzureSpeechResource,
   deleteStoredProviderApiKey,
   readAutomaticRoutingPreference,
   readStoredApiKey,
   readStoredAzureRegion,
+  readStoredAzureSpeechRegion,
+  readStoredAzureSpeechResource,
   readStoredProviderApiKey,
   readStoredTheme,
   readStoredWorkflowProfileId,
   saveAutomaticRoutingPreference,
   saveStoredAzureRegion,
+  saveStoredAzureSpeechRegion,
+  saveStoredAzureSpeechResource,
   saveStoredProviderApiKey,
   saveStoredTheme,
   saveStoredWorkflowProfileId,
@@ -121,6 +129,10 @@ export interface LikeParrotController {
     azureApiKey: string;
     azureRegion: string;
     rememberAzureApiKey: boolean;
+    azureSpeechApiKey: string;
+    azureSpeechRegion: string;
+    azureSpeechResource: string;
+    rememberAzureSpeechApiKey: boolean;
     automaticRoutingPreference: AutomaticRoutingPreference;
     theme: ThemePreference;
     close: () => void;
@@ -128,7 +140,8 @@ export interface LikeParrotController {
       provider: ApiKeyProvider,
       apiKey: string,
       rememberOnDevice: boolean,
-      auxiliaryValue?: string
+      auxiliaryValue?: string,
+      extraAuxiliaryValue?: string
     ) => boolean;
     deleteApiKey: (provider: ApiKeyProvider) => boolean;
     changeAutomaticRoutingPreference: (
@@ -230,10 +243,11 @@ const createCardId = (): string =>
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const isLiveProfileId = (profileId: WorkflowProfileId): profileId is SoundFirstModelId =>
-  profileId === 'gemini-3.5-live-translate-preview' || profileId === 'gpt-realtime-translate';
+  isSoundFirstModelId(profileId);
 
 const getTranslationEngine = (profile: WorkflowProfile): Stage2Option => {
   if (profile.translationMethod === 'chrome_translator') return 'chrome_nano';
+  if (profile.translationMethod === 'bergamot') return 'bergamot';
   if (profile.translationMethod === 'gemini_flash_lite') return 'gemini_stream';
   if (profile.translationMethod === 'azure_translator') return 'turbo_fastpath';
   throw new Error('The selected workflow is not a text translation pipeline.');
@@ -250,6 +264,7 @@ const getUnavailableMessage = (
   if (availability?.missingCredential === 'gemini') return errors.geminiApiKeyRequired;
   if (availability?.missingCredential === 'openai') return errors.openAiApiKeyRequired;
   if (availability?.missingCredential === 'azure') return errors.azureApiKeyRequired;
+  if (availability?.missingCredential === 'azureSpeech') return errors.azureSpeechApiKeyRequired;
   return errors.workflowUnavailable;
 };
 
@@ -262,6 +277,9 @@ export function useLikeParrotController(): LikeParrotController {
   const [initialOpenAiApiKeyRead] = useState(() => readStoredProviderApiKey('openai'));
   const [initialAzureApiKeyRead] = useState(() => readStoredProviderApiKey('azure'));
   const [initialAzureRegionRead] = useState(readStoredAzureRegion);
+  const [initialAzureSpeechApiKeyRead] = useState(() => readStoredProviderApiKey('azureSpeech'));
+  const [initialAzureSpeechRegionRead] = useState(readStoredAzureSpeechRegion);
+  const [initialAzureSpeechResourceRead] = useState(readStoredAzureSpeechResource);
   const [initialLanguages] = useState(getInitialLanguages);
 
   const [apiKey, setApiKey] = useState(initialApiKeyRead.apiKey);
@@ -274,6 +292,14 @@ export function useLikeParrotController(): LikeParrotController {
   const [azureRegion, setAzureRegion] = useState(initialAzureRegionRead.apiKey);
   const [rememberAzureApiKey, setRememberAzureApiKey] = useState(
     initialAzureApiKeyRead.persistent
+  );
+  const [azureSpeechApiKey, setAzureSpeechApiKey] = useState(initialAzureSpeechApiKeyRead.apiKey);
+  const [azureSpeechRegion, setAzureSpeechRegion] = useState(initialAzureSpeechRegionRead.apiKey);
+  const [azureSpeechResource, setAzureSpeechResource] = useState(
+    initialAzureSpeechResourceRead.apiKey
+  );
+  const [rememberAzureSpeechApiKey, setRememberAzureSpeechApiKey] = useState(
+    initialAzureSpeechApiKeyRead.persistent
   );
   const [automaticRoutingPreference, setAutomaticRoutingPreference] = useState(
     readAutomaticRoutingPreference
@@ -291,6 +317,9 @@ export function useLikeParrotController(): LikeParrotController {
       initialOpenAiApiKeyRead,
       initialAzureApiKeyRead,
       initialAzureRegionRead,
+      initialAzureSpeechApiKeyRead,
+      initialAzureSpeechRegionRead,
+      initialAzureSpeechResourceRead,
     ].find((result) => result.status !== 'success');
     return storageFailure
       ? getApiStorageError(storageFailure.status, initialLanguages.source.code)
@@ -310,7 +339,8 @@ export function useLikeParrotController(): LikeParrotController {
     gemini: Boolean(apiKey.trim()),
     openai: Boolean(openAiApiKey.trim()),
     azure: Boolean(azureApiKey.trim()),
-  }), [apiKey, azureApiKey, openAiApiKey]);
+    azureSpeech: Boolean(azureSpeechApiKey.trim() && azureSpeechRegion.trim()),
+  }), [apiKey, azureApiKey, azureSpeechApiKey, azureSpeechRegion, openAiApiKey]);
   const availabilityContext = useMemo(() => ({
     capabilities: platformCapabilities,
     credentials,
@@ -347,6 +377,9 @@ export function useLikeParrotController(): LikeParrotController {
   const openAiApiKeyRef = useRef(openAiApiKey);
   const azureApiKeyRef = useRef(azureApiKey);
   const azureRegionRef = useRef(azureRegion);
+  const azureSpeechApiKeyRef = useRef(azureSpeechApiKey);
+  const azureSpeechRegionRef = useRef(azureSpeechRegion);
+  const azureSpeechResourceRef = useRef(azureSpeechResource);
   const activeProfileRef = useRef<WorkflowProfile | null>(activeProfile);
   const workflowAvailabilityRef = useRef(workflowAvailability);
   const currentPathRef = useRef(currentPath);
@@ -703,7 +736,28 @@ export function useLikeParrotController(): LikeParrotController {
     openAiApiKeyRef.current = openAiApiKey;
     azureApiKeyRef.current = azureApiKey;
     azureRegionRef.current = azureRegion;
-  }, [apiKey, azureApiKey, azureRegion, openAiApiKey]);
+    azureSpeechApiKeyRef.current = azureSpeechApiKey;
+    azureSpeechRegionRef.current = azureSpeechRegion;
+    azureSpeechResourceRef.current = azureSpeechResource;
+  }, [
+    apiKey,
+    azureApiKey,
+    azureRegion,
+    azureSpeechApiKey,
+    azureSpeechRegion,
+    azureSpeechResource,
+    openAiApiKey,
+  ]);
+
+  useEffect(() => {
+    if (activeProfile?.translationMethod !== 'bergamot') return;
+    const timer = window.setTimeout(() => {
+      void BergamotTranslator.prepare(sourceLang.code, targetLang.code).catch((error) => {
+        console.warn('[Bergamot] model preparation failed:', error);
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [activeProfile?.translationMethod, sourceLang.code, targetLang.code]);
 
   useEffect(() => {
     activeProfileRef.current = activeProfile;
@@ -822,13 +876,25 @@ export function useLikeParrotController(): LikeParrotController {
     const openAiService = new OpenAIRealtimeTranslationService(
       createCallbacks('gpt-realtime-translate')
     );
+    const azureInterpreterService = new AzureSpeechLiveTranslationService(
+      'live-interpreter',
+      createCallbacks('azure-speech-live-interpreter')
+    );
+    const azureSpeechTranslationService = new AzureSpeechLiveTranslationService(
+      'speech-translation',
+      createCallbacks('azure-speech-translation')
+    );
     liveServicesRef.current = {
       'gemini-3.5-live-translate-preview': geminiService,
       'gpt-realtime-translate': openAiService,
+      'azure-speech-live-interpreter': azureInterpreterService,
+      'azure-speech-translation': azureSpeechTranslationService,
     };
     return () => {
       geminiService.dispose();
       openAiService.dispose();
+      azureInterpreterService.dispose();
+      azureSpeechTranslationService.dispose();
       liveServicesRef.current = {};
     };
   }, [upsertCard]);
@@ -924,15 +990,22 @@ export function useLikeParrotController(): LikeParrotController {
     provider: ApiKeyProvider,
     key: string,
     rememberOnDevice: boolean,
-    auxiliaryValue = ''
+    auxiliaryValue = '',
+    extraAuxiliaryValue = ''
   ): boolean => {
     const cleanKey = key.trim();
     const keyStatus = saveStoredProviderApiKey(provider, cleanKey, rememberOnDevice);
     const regionStatus = provider === 'azure'
       ? saveStoredAzureRegion(auxiliaryValue, rememberOnDevice)
+      : provider === 'azureSpeech'
+        ? saveStoredAzureSpeechRegion(auxiliaryValue, rememberOnDevice)
+        : 'success';
+    const resourceStatus = provider === 'azureSpeech'
+      ? saveStoredAzureSpeechResource(extraAuxiliaryValue, rememberOnDevice)
       : 'success';
-    const status = keyStatus !== 'success' ? keyStatus : regionStatus;
-    const sessionSaved = ![keyStatus, regionStatus].some(
+    const status = [keyStatus, regionStatus, resourceStatus].find((value) => value !== 'success') ??
+      'success';
+    const sessionSaved = ![keyStatus, regionStatus, resourceStatus].some(
       (value) => value === 'session-failed' || value === 'session-and-legacy-failed'
     );
     if (sessionSaved) {
@@ -948,6 +1021,16 @@ export function useLikeParrotController(): LikeParrotController {
         setRememberOpenAiApiKey(keyStatus === 'legacy-cleanup-failed'
           ? rememberOpenAiApiKey
           : rememberOnDevice);
+      } else if (provider === 'azureSpeech') {
+        azureSpeechApiKeyRef.current = cleanKey;
+        azureSpeechRegionRef.current = auxiliaryValue.trim().toLowerCase();
+        azureSpeechResourceRef.current = extraAuxiliaryValue.trim();
+        setAzureSpeechApiKey(cleanKey);
+        setAzureSpeechRegion(auxiliaryValue.trim().toLowerCase());
+        setAzureSpeechResource(extraAuxiliaryValue.trim());
+        setRememberAzureSpeechApiKey(status === 'legacy-cleanup-failed'
+          ? rememberAzureSpeechApiKey
+          : rememberOnDevice);
       } else {
         azureApiKeyRef.current = cleanKey;
         azureRegionRef.current = auxiliaryValue.trim().toLowerCase();
@@ -960,13 +1043,21 @@ export function useLikeParrotController(): LikeParrotController {
     }
     setErrorMessage(getApiStorageError(status, sourceLangRef.current.code));
     return status === 'success';
-  }, [rememberApiKey, rememberAzureApiKey, rememberOpenAiApiKey]);
+  }, [rememberApiKey, rememberAzureApiKey, rememberAzureSpeechApiKey, rememberOpenAiApiKey]);
 
   const handleDeleteApiKey = useCallback((provider: ApiKeyProvider): boolean => {
     stopWorkflow();
     const keyStatus = deleteStoredProviderApiKey(provider);
-    const regionStatus = provider === 'azure' ? deleteStoredAzureRegion() : 'success';
-    const status = keyStatus !== 'success' ? keyStatus : regionStatus;
+    const regionStatus = provider === 'azure'
+      ? deleteStoredAzureRegion()
+      : provider === 'azureSpeech'
+        ? deleteStoredAzureSpeechRegion()
+        : 'success';
+    const resourceStatus = provider === 'azureSpeech'
+      ? deleteStoredAzureSpeechResource()
+      : 'success';
+    const status = [keyStatus, regionStatus, resourceStatus].find((value) => value !== 'success') ??
+      'success';
     if (provider === 'gemini') {
       apiKeyRef.current = '';
       setApiKey('');
@@ -975,6 +1066,14 @@ export function useLikeParrotController(): LikeParrotController {
       openAiApiKeyRef.current = '';
       setOpenAiApiKey('');
       setRememberOpenAiApiKey(false);
+    } else if (provider === 'azureSpeech') {
+      azureSpeechApiKeyRef.current = '';
+      azureSpeechRegionRef.current = '';
+      azureSpeechResourceRef.current = '';
+      setAzureSpeechApiKey('');
+      setAzureSpeechRegion('');
+      setAzureSpeechResource('');
+      setRememberAzureSpeechApiKey(false);
     } else {
       azureApiKeyRef.current = '';
       azureRegionRef.current = '';
@@ -1051,7 +1150,9 @@ export function useLikeParrotController(): LikeParrotController {
     if (profile.kind === 'realtime-audio' && isLiveProfileId(profile.id)) {
       const selectedApiKey = profile.credentialProvider === 'openai'
         ? openAiApiKeyRef.current
-        : apiKeyRef.current;
+        : profile.credentialProvider === 'azureSpeech'
+          ? azureSpeechApiKeyRef.current
+          : apiKeyRef.current;
       if (!selectedApiKey.trim()) {
         setErrorMessage(getUnavailableMessage(selectedAvailability, sourceLang.code));
         return;
@@ -1075,7 +1176,13 @@ export function useLikeParrotController(): LikeParrotController {
         await liveService.start(
           selectedApiKey,
           sourceLangRef.current.code,
-          targetLangRef.current.code
+          targetLangRef.current.code,
+          profile.credentialProvider === 'azureSpeech'
+            ? {
+              region: azureSpeechRegionRef.current,
+              resourceName: azureSpeechResourceRef.current,
+            }
+            : undefined
         );
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -1310,6 +1417,10 @@ export function useLikeParrotController(): LikeParrotController {
     azureApiKey,
     azureRegion,
     rememberAzureApiKey,
+    azureSpeechApiKey,
+    azureSpeechRegion,
+    azureSpeechResource,
+    rememberAzureSpeechApiKey,
     automaticRoutingPreference,
     theme,
     close: handleCloseSettings,
@@ -1322,6 +1433,9 @@ export function useLikeParrotController(): LikeParrotController {
     automaticRoutingPreference,
     azureApiKey,
     azureRegion,
+    azureSpeechApiKey,
+    azureSpeechRegion,
+    azureSpeechResource,
     handleAutomaticRoutingPreferenceChange,
     handleCloseSettings,
     handleDeleteApiKey,
@@ -1331,6 +1445,7 @@ export function useLikeParrotController(): LikeParrotController {
     openAiApiKey,
     rememberApiKey,
     rememberAzureApiKey,
+    rememberAzureSpeechApiKey,
     rememberOpenAiApiKey,
     theme,
   ]);

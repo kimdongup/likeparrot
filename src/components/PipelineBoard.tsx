@@ -39,9 +39,11 @@ export const PipelineBoard = memo(function PipelineBoard({
     ? t.pipeline.automaticRouting
     : pipeline.engineType === 'chrome_nano'
       ? t.pipeline.chromeTranslator
-      : pipeline.engineType === 'gemini_stream'
-        ? t.pipeline.geminiStream
-        : t.pipeline.networkFallback;
+      : pipeline.engineType === 'bergamot'
+        ? t.pipeline.bergamotTranslator
+        : pipeline.engineType === 'gemini_stream'
+          ? t.pipeline.geminiStream
+          : t.pipeline.networkFallback;
   const ttsStatus = selections.stage3 === 'tts_pipelined'
     ? t.pipeline.phraseStatus
     : t.pipeline.sentenceStatus;
@@ -62,6 +64,8 @@ export const PipelineBoard = memo(function PipelineBoard({
     switch (pipeline.engineType) {
       case 'chrome_nano':
         return 'from-cyan-500/20 to-blue-500/10 border-cyan-500/40 text-cyan-300';
+      case 'bergamot':
+        return 'from-emerald-500/20 to-teal-500/10 border-emerald-500/40 text-emerald-300';
       case 'gemini_stream':
         return 'from-indigo-500/20 to-purple-500/10 border-indigo-500/40 text-indigo-300';
       case 'network_fallback':
@@ -164,6 +168,7 @@ export const PipelineBoard = memo(function PipelineBoard({
           >
             <option value="auto">{t.pipeline.automaticRouting}</option>
             <option value="chrome_nano">{t.pipeline.chromeTranslator}</option>
+            <option value="bergamot">{t.pipeline.bergamotTranslator}</option>
             <option value="gemini_stream">{t.pipeline.geminiStream}</option>
             <option value="turbo_fastpath">{t.pipeline.networkFallback}</option>
           </select>

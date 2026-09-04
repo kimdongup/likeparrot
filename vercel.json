@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/bergamot-models/:path*",
+      "destination": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/:path*"
+    },
+    {
       "source": "/all_in_one",
       "destination": "/index.html"
     },

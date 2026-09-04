@@ -32,10 +32,22 @@ interface ApiKeySettingsPanelProps {
     label: string;
     placeholder: string;
     hint?: string;
+    required?: boolean;
+  };
+  extraAuxiliaryInput?: {
+    value: string;
+    label: string;
+    placeholder: string;
+    hint?: string;
   };
   t: UiStrings;
   autoFocus?: boolean;
-  onSave: (apiKey: string, rememberOnDevice: boolean, auxiliaryValue?: string) => ActionResult;
+  onSave: (
+    apiKey: string,
+    rememberOnDevice: boolean,
+    auxiliaryValue?: string,
+    extraAuxiliaryValue?: string
+  ) => ActionResult;
   onDelete: () => ActionResult;
 }
 
@@ -53,6 +65,7 @@ export function ApiKeySettingsPanel({
   createKeyUrl,
   securityNotice,
   auxiliaryInput,
+  extraAuxiliaryInput,
   t,
   autoFocus = false,
   onSave,
@@ -60,6 +73,7 @@ export function ApiKeySettingsPanel({
 }: ApiKeySettingsPanelProps) {
   const [inputKey, setInputKey] = useState(apiKey);
   const [auxiliaryValue, setAuxiliaryValue] = useState(auxiliaryInput?.value ?? '');
+  const [extraAuxiliaryValue, setExtraAuxiliaryValue] = useState(extraAuxiliaryInput?.value ?? '');
   const [rememberOnDevice, setRememberOnDevice] = useState(rememberApiKey);
   const [showKey, setShowKey] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -87,10 +101,16 @@ export function ApiKeySettingsPanel({
     event.preventDefault();
     const cleanKey = inputKey.trim();
     if (!cleanKey || saveState === 'saving' || isDeleting) return;
+    if (auxiliaryInput?.required && !auxiliaryValue.trim()) return;
     setActionError(null);
     setSaveState('saving');
     try {
-      const result = await onSave(cleanKey, rememberOnDevice, auxiliaryValue.trim());
+      const result = await onSave(
+        cleanKey,
+        rememberOnDevice,
+        auxiliaryValue.trim(),
+        extraAuxiliaryValue.trim()
+      );
       if (result === false) {
         setRememberOnDevice(rememberApiKey);
         setActionError('storage');
@@ -118,6 +138,7 @@ export function ApiKeySettingsPanel({
       const result = await onDelete();
       setInputKey('');
       setAuxiliaryValue('');
+      setExtraAuxiliaryValue('');
       setRememberOnDevice(false);
       setShowKey(false);
       setSaveState('idle');
@@ -200,11 +221,43 @@ export function ApiKeySettingsPanel({
             autoCapitalize="none"
             spellCheck={false}
             placeholder={auxiliaryInput.placeholder}
+            required={auxiliaryInput.required}
             className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-950 [[data-theme=light]_&]:placeholder:text-slate-400"
           />
           {auxiliaryInput.hint && (
             <p className="mt-1.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
               {auxiliaryInput.hint}
+            </p>
+          )}
+        </div>
+      )}
+
+      {extraAuxiliaryInput && (
+        <div>
+          <label
+            htmlFor={`${provider}-api-extra-auxiliary`}
+            className="mb-1.5 block text-xs font-semibold text-slate-300 [[data-theme=light]_&]:text-slate-700"
+          >
+            {extraAuxiliaryInput.label}
+          </label>
+          <input
+            id={`${provider}-api-extra-auxiliary`}
+            type="text"
+            value={extraAuxiliaryValue}
+            onChange={(event) => {
+              setExtraAuxiliaryValue(event.target.value);
+              setSaveState('idle');
+              setActionError(null);
+            }}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder={extraAuxiliaryInput.placeholder}
+            className="h-12 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 [[data-theme=light]_&]:border-slate-300 [[data-theme=light]_&]:bg-slate-50 [[data-theme=light]_&]:text-slate-950 [[data-theme=light]_&]:placeholder:text-slate-400"
+          />
+          {extraAuxiliaryInput.hint && (
+            <p className="mt-1.5 text-xs leading-5 text-slate-400 [[data-theme=light]_&]:text-slate-600">
+              {extraAuxiliaryInput.hint}
             </p>
           )}
         </div>

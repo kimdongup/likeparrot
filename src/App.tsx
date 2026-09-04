@@ -163,6 +163,10 @@ export function App() {
         azureApiKey={settings.azureApiKey}
         azureRegion={settings.azureRegion}
         rememberAzureApiKey={settings.rememberAzureApiKey}
+        azureSpeechApiKey={settings.azureSpeechApiKey}
+        azureSpeechRegion={settings.azureSpeechRegion}
+        azureSpeechResource={settings.azureSpeechResource}
+        rememberAzureSpeechApiKey={settings.rememberAzureSpeechApiKey}
         onSaveApiKey={settings.saveApiKey}
         onDeleteApiKey={settings.deleteApiKey}
         automaticRoutingPreference={settings.automaticRoutingPreference}

@@ -4,10 +4,13 @@ export type WorkflowProfileId =
   | 'auto'
   | 'gemini-3.5-live-translate-preview'
   | 'gpt-realtime-translate'
+  | 'azure-speech-live-interpreter'
+  | 'azure-speech-translation'
   | 'desktop-chrome-on-device-fast'
   | 'desktop-chrome-on-device-stable'
   | 'desktop-webspeech-gemini-stable'
   | 'desktop-webspeech-azure-stable'
+  | 'mobile-dictation-bergamot'
   | 'mobile-dictation-gemini'
   | 'mobile-dictation-azure';
 
@@ -15,7 +18,7 @@ export type WorkflowGroup = 'automatic' | 'live-audio' | 'desktop' | 'mobile';
 
 export type WorkflowKind = 'automatic' | 'realtime-audio' | 'text-pipeline';
 
-export type WorkflowCredentialProvider = 'gemini' | 'openai' | 'azure' | null;
+export type WorkflowCredentialProvider = 'gemini' | 'openai' | 'azure' | 'azureSpeech' | null;
 
 export type WorkflowCapability =
   | 'secure_context'
@@ -29,7 +32,8 @@ export type WorkflowCapability =
   | 'web_speech'
   | 'translator_api'
   | 'speech_synthesis'
-  | 'editable_text';
+  | 'editable_text'
+  | 'web_assembly';
 
 export type WorkflowInputMethod =
   | 'automatic'
@@ -41,7 +45,10 @@ export type WorkflowTranslationMethod =
   | 'automatic'
   | 'gemini_live'
   | 'openai_realtime'
+  | 'azure_speech_live'
+  | 'azure_speech_translation'
   | 'chrome_translator'
+  | 'bergamot'
   | 'gemini_flash_lite'
   | 'azure_translator';
 
@@ -77,6 +84,7 @@ export interface WorkflowCredentialState {
   gemini: boolean;
   openai: boolean;
   azure: boolean;
+  azureSpeech: boolean;
 }
 
 export interface WorkflowAvailabilityContext {
@@ -106,7 +114,11 @@ export interface WorkflowResolution {
 }
 
 const liveAudioSteps = (
-  provider: 'Gemini Live' | 'OpenAI Realtime'
+  provider:
+    | 'Gemini Live'
+    | 'OpenAI Realtime'
+    | 'Azure Speech Live Interpreter'
+    | 'Azure Speech Translation'
 ): readonly WorkflowFlowStep[] => [
   {
     id: 'capture-audio',
@@ -176,7 +188,8 @@ const desktopTextSteps = (
 ];
 
 const mobileDictationSteps = (
-  translationLabel: string
+  translationLabel: string,
+  translationLocation: 'device' | 'network' = 'network'
 ): readonly WorkflowFlowStep[] => [
   {
     id: 'focus-editor',
@@ -199,8 +212,10 @@ const mobileDictationSteps = (
   {
     id: 'translate-text',
     label: `Translate with ${translationLabel}`,
-    detail: 'The submitted text is sent to the configured translation provider.',
-    location: 'network',
+    detail: translationLocation === 'device'
+      ? 'The submitted text is translated on this device with a downloaded Bergamot language pair.'
+      : 'The submitted text is sent to the configured translation provider.',
+    location: translationLocation,
   },
   {
     id: 'device-tts',
@@ -288,6 +303,47 @@ export const WORKFLOW_PROFILES: readonly WorkflowProfile[] = [
     steps: liveAudioSteps('OpenAI Realtime'),
   },
   {
+    id: 'azure-speech-live-interpreter',
+    label: 'Azure Speech Live Interpreter',
+    shortLabel: 'Azure Interpreter',
+    description: 'Streaming speech-to-speech translation with automatic source-language detection.',
+    group: 'live-audio',
+    kind: 'realtime-audio',
+    inputMethod: 'live_microphone',
+    translationMethod: 'azure_speech_live',
+    outputMethod: 'model_audio',
+    endpointProfile: null,
+    credentialProvider: 'azureSpeech',
+    requiredCapabilities: ['secure_context', 'microphone_capture', 'websocket'],
+    requirements: [
+      'Azure Speech API key and region',
+      'Speech resource name recommended for Live Interpreter',
+      'Microphone permission',
+      'Secure connection',
+    ],
+    steps: liveAudioSteps('Azure Speech Live Interpreter'),
+  },
+  {
+    id: 'azure-speech-translation',
+    label: 'Azure Speech Translation',
+    shortLabel: 'Azure Speech',
+    description: 'Streaming speech translation with source transcript and synthesized target audio.',
+    group: 'live-audio',
+    kind: 'realtime-audio',
+    inputMethod: 'live_microphone',
+    translationMethod: 'azure_speech_translation',
+    outputMethod: 'model_audio',
+    endpointProfile: null,
+    credentialProvider: 'azureSpeech',
+    requiredCapabilities: ['secure_context', 'microphone_capture', 'websocket'],
+    requirements: [
+      'Azure Speech API key and region',
+      'Microphone permission',
+      'Secure connection',
+    ],
+    steps: liveAudioSteps('Azure Speech Translation'),
+  },
+  {
     id: 'desktop-chrome-on-device-fast',
     label: 'Desktop Chrome on-device — fast',
     shortLabel: 'Chrome local · fast',
@@ -352,6 +408,27 @@ export const WORKFLOW_PROFILES: readonly WorkflowProfile[] = [
     steps: desktopTextSteps('Azure AI Translator', 'stable', 'network'),
   },
   {
+    id: 'mobile-dictation-bergamot',
+    label: 'Mobile keyboard dictation + Bergamot',
+    shortLabel: 'Mobile · Bergamot',
+    description: 'Editable keyboard dictation, on-device Bergamot translation, and device TTS.',
+    group: 'mobile',
+    kind: 'text-pipeline',
+    inputMethod: 'mobile_keyboard',
+    translationMethod: 'bergamot',
+    outputMethod: 'device_tts',
+    endpointProfile: null,
+    credentialProvider: null,
+    requiredCapabilities: ['mobile_device', 'editable_text', 'speech_synthesis', 'secure_context', 'web_assembly'],
+    requirements: [
+      'Phone or tablet keyboard',
+      'You start dictation from the keyboard microphone',
+      'WebAssembly worker support',
+      'Device TTS voice',
+    ],
+    steps: mobileDictationSteps('Bergamot on-device translator', 'device'),
+  },
+  {
     id: 'mobile-dictation-gemini',
     label: 'Mobile keyboard dictation + Gemini Flash-Lite',
     shortLabel: 'Mobile · Gemini',
@@ -402,6 +479,7 @@ const CAPABILITY_LABELS: Record<WorkflowCapability, string> = {
   translator_api: 'the Chrome Translator API',
   speech_synthesis: 'device text-to-speech',
   editable_text: 'editable text input',
+  web_assembly: 'WebAssembly workers',
 };
 
 const hasCapability = (
@@ -421,12 +499,14 @@ const hasCapability = (
     case 'translator_api': return capabilities.supportsTranslatorApi;
     case 'speech_synthesis': return capabilities.supportsSpeechSynthesis;
     case 'editable_text': return capabilities.supportsEditableText;
+    case 'web_assembly': return capabilities.supportsWebAssembly;
   }
 };
 
 const providerName = (provider: Exclude<WorkflowCredentialProvider, null>): string => {
   if (provider === 'openai') return 'OpenAI';
   if (provider === 'azure') return 'Azure Translator';
+  if (provider === 'azureSpeech') return 'Azure Speech';
   return 'Gemini';
 };
 
@@ -471,10 +551,14 @@ const getTextPipelineCandidates = (
   const cloudOrder = orderedPair(preferredCloud, preferredCloud === 'azure' ? 'gemini' : 'azure');
 
   if (capabilities.isMobile) {
-    if (!options.allowCloudFallback) return [];
-    return cloudOrder.map((provider) => (
-      provider === 'azure' ? 'mobile-dictation-azure' : 'mobile-dictation-gemini'
-    ));
+    const localMobile: WorkflowProfileId[] = ['mobile-dictation-bergamot'];
+    if (!options.allowCloudFallback) return localMobile;
+    return [
+      ...localMobile,
+      ...cloudOrder.map((provider): WorkflowProfileId => (
+        provider === 'azure' ? 'mobile-dictation-azure' : 'mobile-dictation-gemini'
+      )),
+    ];
   }
 
   const endpoint = options.desktopEndpoint ?? 'stable';
@@ -524,7 +608,7 @@ export const resolveAutomaticWorkflow = (
   const reason = !options.allowCloudFallback && mode !== 'audio-first'
     ? 'Automatic cloud fallback is off. Choose a cloud workflow explicitly or enable cloud fallback.'
     : context.capabilities.isMobile && mode !== 'audio-first'
-      ? 'Mobile keyboard dictation only creates text. Save a Gemini or Azure Translator API key to translate it.'
+      ? 'Mobile keyboard dictation only creates text. Use Bergamot on this device, or save a Gemini or Azure Translator API key.'
       : 'No complete workflow matches this device and the currently saved credentials.';
   return { profile: null, reason };
 };

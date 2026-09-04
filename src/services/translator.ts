@@ -1,3 +1,4 @@
+import { BergamotTranslator } from './bergamotTranslator';
 import { BuiltInTranslator } from './builtInTranslator';
 import type { PipelineEngineType, Stage2Option } from '../types';
 
@@ -104,6 +105,7 @@ export class TranslationService {
     throwIfAborted(signal);
 
     const shouldTryBrowser = targetEngine === 'auto' || targetEngine === 'chrome_nano';
+    const shouldTryBergamot = targetEngine === 'bergamot';
     const shouldTryGemini = targetEngine === 'auto' || targetEngine === 'gemini_stream';
     const shouldTryAzure = targetEngine === 'auto' || targetEngine === 'turbo_fastpath';
     const cleanKey = apiKey?.trim() ?? '';
@@ -141,6 +143,30 @@ export class TranslationService {
       if (targetEngine === 'chrome_nano') {
         throw new TranslationError(
           'Browser on-device translation is unavailable here. Use Automatic, Gemini Flash-Lite, or Azure Translator.'
+        );
+      }
+    }
+
+    if (shouldTryBergamot) {
+      try {
+        const translatedText = await BergamotTranslator.translate(
+          cleanText,
+          sourceCode,
+          targetCode
+        );
+        const latencyMs = Math.round(performance.now() - startTime);
+        onChunk?.(translatedText, translatedText);
+        onClauseReady?.(translatedText);
+        return {
+          translatedText,
+          engineName: 'Bergamot on-device translator',
+          engineType: 'bergamot',
+          latencyMs,
+        };
+      } catch (error) {
+        if (signal?.aborted || isAbortError(error)) throw error;
+        throw new TranslationError(
+          error instanceof Error ? error.message : 'Bergamot on-device translation failed.'
         );
       }
     }

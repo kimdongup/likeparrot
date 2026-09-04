@@ -68,6 +68,7 @@ export interface UiStrings {
     stableDetection: string;
     automaticRouting: string;
     chromeTranslator: string;
+    bergamotTranslator: string;
     geminiStream: string;
     networkFallback: string;
     phrasePlayback: string;
@@ -135,6 +136,19 @@ export interface UiStrings {
     azureApiStep3: string;
     createAzureKey: string;
     azureTokenNotice: string;
+    azureSpeechApiKey: string;
+    azureSpeechApiDescription: string;
+    azureSpeechApiInputLabel: string;
+    azureSpeechRegion: string;
+    azureSpeechRegionHint: string;
+    azureSpeechResource: string;
+    azureSpeechResourceHint: string;
+    azureSpeechHowToGetKey: string;
+    azureSpeechApiStep1: string;
+    azureSpeechApiStep2: string;
+    azureSpeechApiStep3: string;
+    createAzureSpeechKey: string;
+    azureSpeechTokenNotice: string;
     persistentKeyWarning: string;
     sessionKeyWarning: string;
     publicDeploymentWarning: string;
@@ -190,6 +204,7 @@ export interface UiStrings {
     geminiApiKeyRequired: string;
     openAiApiKeyRequired: string;
     azureApiKeyRequired: string;
+    azureSpeechApiKeyRequired: string;
     audioFirstNeedsKey: string;
     audioFirstNeedsOpenAiKey: string;
     audioFirstInit: string;

@@ -1,13 +1,9 @@
+import { LiveStreamTurnAssembler } from './liveStreamTurns';
 import type {
   LiveSocketCallbacks,
   LiveTranslationService,
 } from './liveTranslation';
 
-const TURN_QUIET_MS = 1_400;
-// Source transcription is an independently billed/modelled stream and can
-// trail translated output. Give it a little longer before saving a turn so a
-// transient lag does not create a translation card with a missing source.
-const SOURCE_TRANSCRIPT_GRACE_MS = 3_000;
 // Translation sessions can emit a final transcript/audio tail after
 // `session.close`. Keep a bounded drain window instead of dropping it
 // immediately; the server normally answers with `session.closed` sooner.
@@ -25,8 +21,6 @@ interface ClientSecretResponse {
   error?: { message?: string };
 }
 
-const appendDelta = (previous: string, delta: string): string => `${previous}${delta}`;
-
 export class OpenAIRealtimeTranslationService implements LiveTranslationService {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
@@ -37,17 +31,22 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
   private isStopping = false;
   private sourceLanguageCode = '';
   private targetLanguageCode = '';
-  private sourceText = '';
-  private outputText = '';
-  private speechStartedAt = 0;
-  private firstOutputAt = 0;
-  private turnTimer: number | null = null;
+  private readonly turns: LiveStreamTurnAssembler;
   private closeTimer: number | null = null;
   private closeResolve: (() => void) | null = null;
   private stopPromise: Promise<void> | null = null;
 
   constructor(callbacks: LiveSocketCallbacks = {}) {
     this.callbacks = callbacks;
+    this.turns = new LiveStreamTurnAssembler((turn) => {
+      this.callbacks.onTurnComplete?.({
+        ...turn,
+        sourceLanguageCode: this.sourceLanguageCode,
+        targetLanguageCode: this.targetLanguageCode,
+      });
+      this.callbacks.onInputTranscript?.(this.turns.sourcePreview, Boolean(this.turns.sourcePreview));
+      this.callbacks.onOutputTranscript?.(this.turns.outputPreview);
+    });
   }
 
   public setCallbacks(callbacks: LiveSocketCallbacks): void {
@@ -57,7 +56,8 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
   public async start(
     apiKey: string,
     sourceLanguageCode: string,
-    targetLanguageCode: string
+    targetLanguageCode: string,
+    _options?: import('./liveTranslation').LiveStartOptions
   ): Promise<void> {
     const cleanKey = apiKey.trim();
     if (!cleanKey) throw new Error('An OpenAI API key is required.');
@@ -70,7 +70,7 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
     this.isStopping = false;
     this.sourceLanguageCode = sourceLanguageCode;
     this.targetLanguageCode = targetLanguageCode;
-    this.resetTurn();
+    this.turns.reset();
     this.callbacks.onStatusChange?.('connecting');
 
     try {
@@ -214,22 +214,14 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
 
   private handleServerEvent(event: TranslationServerEvent): void {
     if (event.type === 'session.input_transcript.delta' && event.delta) {
-      if (!this.speechStartedAt) this.speechStartedAt = performance.now();
-      this.sourceText = appendDelta(this.sourceText, event.delta);
-      this.callbacks.onInputTranscript?.(this.sourceText, true);
-      // Output deltas define the translated turn boundary. Resetting the quiet
-      // timer on source-only deltas can commit a card before its translation
-      // arrives on a slower connection.
-      if (this.outputText) this.scheduleTurnFlush();
+      this.turns.appendSource(event.delta, 'delta');
+      this.callbacks.onInputTranscript?.(this.turns.sourcePreview, true);
       return;
     }
     if (event.type === 'session.output_transcript.delta' && event.delta) {
-      if (!this.speechStartedAt) this.speechStartedAt = performance.now();
-      if (!this.firstOutputAt) this.firstOutputAt = performance.now();
-      this.outputText = appendDelta(this.outputText, event.delta);
-      this.callbacks.onOutputTranscript?.(this.outputText);
+      this.turns.appendOutput(event.delta, 'delta');
+      this.callbacks.onOutputTranscript?.(this.turns.outputPreview);
       this.callbacks.onAudioPlayingState?.(true);
-      this.scheduleTurnFlush();
       return;
     }
     if (event.type === 'error') {
@@ -242,47 +234,11 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
     }
   }
 
-  private scheduleTurnFlush(): void {
-    if (this.turnTimer !== null) window.clearTimeout(this.turnTimer);
-    const delayMs = this.sourceText.trim()
-      ? TURN_QUIET_MS
-      : SOURCE_TRANSCRIPT_GRACE_MS;
-    this.turnTimer = window.setTimeout(() => {
-      this.turnTimer = null;
-      this.flushTurn();
-    }, delayMs);
-  }
-
   private flushTurn(): void {
-    if (this.turnTimer !== null) {
-      window.clearTimeout(this.turnTimer);
-      this.turnTimer = null;
-    }
-    const translatedText = this.outputText.trim();
-    const sourceText = this.sourceText.trim();
-    if (translatedText) {
-      const latencyMs = this.speechStartedAt && this.firstOutputAt
-        ? Math.max(0, Math.round(this.firstOutputAt - this.speechStartedAt))
-        : 0;
-      this.callbacks.onTurnComplete?.({
-        sourceText,
-        translatedText,
-        sourceLanguageCode: this.sourceLanguageCode,
-        targetLanguageCode: this.targetLanguageCode,
-        latencyMs,
-      });
-    }
+    this.turns.flush();
     this.callbacks.onAudioPlayingState?.(false);
     this.callbacks.onInputTranscript?.('', false);
     this.callbacks.onOutputTranscript?.('');
-    this.resetTurn();
-  }
-
-  private resetTurn(): void {
-    this.sourceText = '';
-    this.outputText = '';
-    this.speechStartedAt = 0;
-    this.firstOutputAt = 0;
   }
 
   public async stop(): Promise<void> {
@@ -330,8 +286,7 @@ export class OpenAIRealtimeTranslationService implements LiveTranslationService 
   }
 
   private cleanup(notify: boolean): void {
-    if (this.turnTimer !== null) window.clearTimeout(this.turnTimer);
-    this.turnTimer = null;
+    this.turns.reset();
     this.finishClose();
     if (this.dataChannel) {
       this.dataChannel.onclose = null;

@@ -5,10 +5,10 @@
  * Output: mono, little-endian PCM16 at 24 kHz
  */
 
+import { LiveStreamTurnAssembler } from './liveStreamTurns';
 import type {
   LiveSocketCallbacks,
   LiveTranslationService,
-  LiveTranslationTurn,
 } from './liveTranslation';
 
 export type {
@@ -25,7 +25,6 @@ const INPUT_CHUNK_SAMPLES = 1_600; // 100 ms, per the Live Translation guide
 // a translation experience more than dropping the congested interval.
 const MAX_WEBSOCKET_BUFFER_BYTES = 20 * 1024;
 const CONNECT_TIMEOUT_MS = 12_000;
-const INPUT_TRANSCRIPT_GRACE_MS = 300;
 const STOP_MINIMUM_DRAIN_MS = 400;
 const STOP_DRAIN_TIMEOUT_MS = 3_000;
 
@@ -100,12 +99,6 @@ const buildLiveSetupMessage = (
   },
 });
 
-interface PendingCompletedTurn extends LiveTranslationTurn {
-  hasFinalInput: boolean;
-  claimedInputStartedAt: number;
-  timerId: number | null;
-}
-
 const getAudioContextConstructor = (): AudioContextConstructor => {
   const AudioCtx = window.AudioContext ??
     (window as typeof window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext;
@@ -124,49 +117,6 @@ const toLiveLanguageCode = (languageCode: string): string => {
     return 'zh-Hans';
   }
   return languageCode.split('-')[0].toLowerCase();
-};
-
-/**
- * Transcription messages can be deltas or revised snapshots. Merge both forms
- * without duplicating the already displayed prefix.
- */
-const mergeTranscript = (previous: string, incoming: string): string => {
-  const next = incoming.trim();
-  if (!next) return previous;
-  if (!previous) return next;
-  if (next === previous || previous.endsWith(next)) return previous;
-  if (next.startsWith(previous)) return next;
-
-  const maxOverlap = Math.min(previous.length, next.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    if (previous.slice(-overlap) === next.slice(0, overlap)) {
-      return `${previous}${next.slice(overlap)}`;
-    }
-  }
-
-  const needsSpace = /^\s/u.test(incoming) || (
-    /[\p{Script=Latin}\p{N}]$/u.test(previous) &&
-    /^[\p{Script=Latin}\p{N}]/u.test(next)
-  );
-  return `${previous}${needsSpace ? ' ' : ''}${next}`;
-};
-
-const transcriptsLikelyMatch = (left: string, right: string): boolean => {
-  const compact = (value: string) => value
-    .normalize('NFKC')
-    .toLocaleLowerCase()
-    .replace(/[\p{P}\p{S}\s]+/gu, '');
-  const first = compact(left);
-  const second = compact(right);
-  if (!first || !second) return false;
-  if (first.startsWith(second) || second.startsWith(first)) return true;
-
-  const minLength = Math.min(first.length, second.length);
-  let commonPrefix = 0;
-  while (commonPrefix < minLength && first[commonPrefix] === second[commonPrefix]) {
-    commonPrefix += 1;
-  }
-  return commonPrefix >= Math.max(3, Math.ceil(minLength * 0.6));
 };
 
 export class GeminiLiveSocketService implements LiveTranslationService {
@@ -222,33 +172,23 @@ export class GeminiLiveSocketService implements LiveTranslationService {
   private nextPlayTime = 0;
   private playbackSources = new Set<AudioBufferSourceNode>();
 
-  private currentInputText = '';
-  private currentInterimInput = '';
-  private currentOutputText = '';
-  private deferredInputText = '';
-  private deferredInputIsFinal = false;
-  private deferredInputAt = 0;
-  private turnInputAt = 0;
-  private firstOutputAt = 0;
   private lastPotentialSpeechAt = 0;
   private lastServerCompletionAt = 0;
-  // Local VAD can run ahead of independently delivered transcriptions. A
-  // terminal event must never consume this marker: only a transcript routed to
-  // the active turn can attribute it. Stop's hard deadline is the final guard.
   private unattributedSpeechStartedAt = 0;
-  private pendingCompletedTurn: PendingCompletedTurn | null = null;
-  // Input transcription has no turn id and may arrive independently of output
-  // completion. Once a completed turn is missing its final input, keep a
-  // routing tombstone. If new speech overlaps that uncertainty, drop all input
-  // text until a fresh (non-resumed) session creates an unambiguous boundary.
-  private orphanInputAwaitingFinal = false;
-  private dropInputUntilFreshSession = false;
-  private freshSessionRequested = false;
+  private readonly turns: LiveStreamTurnAssembler;
 
   private callbacks: LiveSocketCallbacks;
 
   constructor(callbacks: LiveSocketCallbacks = {}) {
     this.callbacks = callbacks;
+    this.turns = new LiveStreamTurnAssembler((turn) => {
+      this.callbacks.onTurnComplete?.({
+        ...turn,
+        sourceLanguageCode: this.sessionSourceLanguageCode,
+        targetLanguageCode: this.sessionTargetLanguageCode,
+      });
+      this.publishTurnPreviews();
+    });
   }
 
   public setCallbacks(callbacks: LiveSocketCallbacks): void {
@@ -263,7 +203,8 @@ export class GeminiLiveSocketService implements LiveTranslationService {
   public async start(
     apiKey: string,
     sourceLanguageCode: string,
-    targetLanguageCode: string
+    targetLanguageCode: string,
+    _options?: import('./liveTranslation').LiveStartOptions
   ): Promise<void> {
     const cleanKey = apiKey.trim();
     if (!cleanKey) {
@@ -677,44 +618,34 @@ export class GeminiLiveSocketService implements LiveTranslationService {
     if (!content) return;
 
     const outputTranscript = content.outputTranscription?.text;
-    const hasOutputPart = Boolean(
-      outputTranscript?.trim() ||
-      content.modelTurn?.parts?.some((part) => part.text?.trim() || part.inlineData?.data)
-    );
     const generationEnded = Boolean(content.interrupted || content.generationComplete);
-    const debtlessTurnComplete = Boolean(
-      content.turnComplete && !generationEnded && this.terminalTurnCompleteDebt === 0
-    );
-    if (
-      this.hasUnresolvedCompletedInput() &&
-      (hasOutputPart || generationEnded || debtlessTurnComplete)
-    ) {
-      // This message proves that a new turn has begun before the prior turn's
-      // input could be attributed. Enter the barrier before routing any input
-      // carried by the same message.
-      this.enterAmbiguousInputBarrier();
-    }
 
     const interimInput = content.interimInputTranscription?.text;
-    if (interimInput?.trim()) this.routeInputTranscription(interimInput, false);
+    if (interimInput?.trim()) {
+      this.unattributedSpeechStartedAt = 0;
+      this.turns.appendSource(interimInput, 'merge');
+      this.callbacks.onInputTranscript?.(this.turns.sourcePreview, true);
+    }
 
     const finalInput = content.inputTranscription?.text;
-    if (finalInput?.trim()) this.routeInputTranscription(finalInput, true);
+    if (finalInput?.trim()) {
+      this.unattributedSpeechStartedAt = 0;
+      this.turns.appendSource(finalInput, 'merge');
+      this.callbacks.onInputTranscript?.(this.turns.sourcePreview, false);
+    }
 
     if (outputTranscript?.trim()) {
-      this.markFirstOutput();
-      this.currentOutputText = mergeTranscript(this.currentOutputText, outputTranscript);
-      this.callbacks.onOutputTranscript?.(this.currentOutputText);
+      this.turns.appendOutput(outputTranscript, 'merge');
+      this.callbacks.onOutputTranscript?.(this.turns.outputPreview);
     }
 
     for (const part of content.modelTurn?.parts ?? []) {
       if (part.text && !outputTranscript) {
-        this.markFirstOutput();
-        this.currentOutputText = mergeTranscript(this.currentOutputText, part.text);
-        this.callbacks.onOutputTranscript?.(this.currentOutputText);
+        this.turns.appendOutput(part.text, 'merge');
+        this.callbacks.onOutputTranscript?.(this.turns.outputPreview);
       }
       if (part.inlineData?.data) {
-        this.markFirstOutput();
+        this.turns.noteOutput();
         if (!this.isStopping) this.playAudioChunk(part.inlineData.data);
       }
     }
@@ -725,14 +656,8 @@ export class GeminiLiveSocketService implements LiveTranslationService {
       this.terminalTurnCompleteDebt += 1;
       this.completionSerial += 1;
       this.drainCompletionSeen = true;
-      this.freezeCurrentTurn(false);
-      if (this.dropInputUntilFreshSession && !this.hasActiveTurnData()) {
-        // A target-language echo can end without output. This terminal belongs
-        // to the new ambiguous turn, so consume its local marker and allow the
-        // pending fresh-session boundary to proceed after turnComplete.
-        this.unattributedSpeechStartedAt = 0;
-        this.turnInputAt = 0;
-      }
+      this.turns.completeUtterance();
+      this.publishTurnPreviews();
       this.maybeFinishLifecycle();
     }
     if (content.turnComplete) {
@@ -742,277 +667,38 @@ export class GeminiLiveSocketService implements LiveTranslationService {
         this.terminalTurnCompleteDebt -= 1;
       } else {
         this.completionSerial += 1;
-        if (!this.pendingCompletedTurn && this.hasActiveTurnData()) {
-          this.freezeCurrentTurn(false);
-        }
-        if (this.dropInputUntilFreshSession && !this.hasActiveTurnData()) {
-          this.unattributedSpeechStartedAt = 0;
-          this.turnInputAt = 0;
-        }
+        this.turns.completeUtterance();
+        this.publishTurnPreviews();
       }
       this.maybeFinishLifecycle();
     }
   }
 
-  private routeInputTranscription(incoming: string, isFinal: boolean): void {
-    const text = incoming.trim();
-    if (!text) return;
-    if (this.dropInputUntilFreshSession || this.orphanInputAwaitingFinal) return;
-
-    const pending = this.pendingCompletedTurn;
-    const activeReference = mergeTranscript(this.currentInputText, this.currentInterimInput);
-    const deferredReference = this.deferredInputText;
-    const matchesActive = Boolean(
-      activeReference && transcriptsLikelyMatch(activeReference, text)
-    );
-    const matchesPending = Boolean(
-      pending?.sourceText && transcriptsLikelyMatch(pending.sourceText, text)
-    );
-    const matchesDeferred = Boolean(
-      deferredReference && transcriptsLikelyMatch(deferredReference, text)
-    );
-
-    // An already-separated next-input slot has priority unless this message is
-    // an unambiguous late revision of the active or just-completed turn.
-    if (deferredReference) {
-      if (matchesPending && !matchesActive && !matchesDeferred && pending) {
-        this.attachPendingInput(pending, text, isFinal);
-      } else if (matchesActive && !matchesPending && !matchesDeferred) {
-        this.attachActiveInput(text, isFinal, false);
-      } else if (!(matchesActive && matchesDeferred) && !(matchesPending && matchesDeferred)) {
-        this.deferInput(text, isFinal);
-      }
-      return;
-    }
-
-    if (pending) {
-      if (!pending.sourceText && pending.claimedInputStartedAt) {
-        // New local speech after an output-only turn makes this transcript
-        // fundamentally ambiguous: it can be late input for the completed turn
-        // or first input for the next one. With no protocol turn id, dropping
-        // the source fragment is safer than merging two saved cards.
-        if (!this.unattributedSpeechStartedAt) {
-          this.attachPendingInput(pending, text, isFinal);
-        }
-        return;
-      }
-      if (matchesPending && !matchesActive) {
-        this.attachPendingInput(pending, text, isFinal);
-      } else if (matchesActive && !matchesPending) {
-        this.attachActiveInput(text, isFinal, false);
-      } else if (!matchesActive && !matchesPending) {
-        if (this.unattributedSpeechStartedAt) {
-          // Final-only next turns are valid. Keep them out of the prior card,
-          // then promote after the completed turn's short transcript grace.
-          this.deferInput(text, isFinal);
-        } else if (!activeReference && !pending.hasFinalInput) {
-          this.attachPendingInput(pending, text, isFinal);
-        }
-      }
-      return;
-    }
-
-    if (activeReference || this.currentOutputText) {
-      if (matchesActive || !this.unattributedSpeechStartedAt) {
-        this.attachActiveInput(text, isFinal, false);
-      } else if (activeReference) {
-        // Local VAD saw new speech while an older turn still owns the active
-        // buffers. Preserve this transcript in a separate slot.
-        this.deferInput(text, isFinal);
-      }
-      return;
-    }
-
-    this.attachActiveInput(text, isFinal, true);
-  }
-
-  private enterAmbiguousInputBarrier(): void {
-    this.dropInputUntilFreshSession = true;
-    this.freshSessionRequested = true;
-    this.currentInputText = '';
-    this.currentInterimInput = '';
-    this.deferredInputText = '';
-    this.deferredInputIsFinal = false;
-    this.deferredInputAt = 0;
-    this.callbacks.onInputTranscript?.('', false);
-  }
-
-  private hasUnresolvedCompletedInput(): boolean {
-    return this.orphanInputAwaitingFinal || Boolean(
-      this.pendingCompletedTurn && !this.pendingCompletedTurn.hasFinalInput
-    );
-  }
-
-  private attachPendingInput(
-    pending: PendingCompletedTurn,
-    text: string,
-    isFinal: boolean
-  ): void {
-    pending.sourceText = mergeTranscript(pending.sourceText, text);
-    if (isFinal) pending.hasFinalInput = true;
-  }
-
-  private attachActiveInput(text: string, isFinal: boolean, bindsLocalSpeech: boolean): void {
-    this.markActiveTranscript(bindsLocalSpeech);
-    if (isFinal) {
-      this.currentInputText = mergeTranscript(this.currentInputText, text);
-      this.currentInterimInput = '';
-      this.callbacks.onInputTranscript?.(this.currentInputText, false);
-      return;
-    }
-    this.currentInterimInput = text;
-    this.callbacks.onInputTranscript?.(
-      mergeTranscript(this.currentInputText, this.currentInterimInput),
-      true
-    );
-  }
-
-  private deferInput(text: string, isFinal: boolean): void {
-    if (!this.deferredInputAt) {
-      this.deferredInputAt = this.unattributedSpeechStartedAt || performance.now();
-    }
-    this.deferredInputText = mergeTranscript(this.deferredInputText, text);
-    this.deferredInputIsFinal ||= isFinal;
-  }
-
-  private promoteDeferredInput(): void {
-    if (!this.deferredInputText || this.currentInputText || this.currentInterimInput) return;
-    const text = this.deferredInputText;
-    const isFinal = this.deferredInputIsFinal;
-    const startedAt = this.deferredInputAt || this.unattributedSpeechStartedAt;
-    this.deferredInputText = '';
-    this.deferredInputIsFinal = false;
-    this.deferredInputAt = 0;
-    this.unattributedSpeechStartedAt = 0;
-    if (!this.turnInputAt) this.turnInputAt = startedAt || performance.now();
-    this.attachActiveInput(text, isFinal, false);
+  private publishTurnPreviews(): void {
+    this.callbacks.onInputTranscript?.(this.turns.sourcePreview, Boolean(this.turns.sourcePreview));
+    this.callbacks.onOutputTranscript?.(this.turns.outputPreview);
   }
 
   private markLocalSpeech(): void {
     const now = performance.now();
-    if (!this.unattributedSpeechStartedAt) {
-      this.unattributedSpeechStartedAt = now;
-    }
-    if (this.hasUnresolvedCompletedInput()) this.enterAmbiguousInputBarrier();
-    if (!this.turnInputAt) this.turnInputAt = now;
+    if (!this.unattributedSpeechStartedAt) this.unattributedSpeechStartedAt = now;
+    this.turns.noteSpeech();
+    this.lastPotentialSpeechAt = now;
     if (!this.isStopping) this.drainCompletionSeen = false;
-  }
-
-  private markActiveTranscript(bindLocalSpeech: boolean): void {
-    const locallyObservedAt = this.unattributedSpeechStartedAt;
-    if (bindLocalSpeech) this.unattributedSpeechStartedAt = 0;
-    if (!this.isStopping) this.drainCompletionSeen = false;
-    if (!this.turnInputAt) {
-      this.turnInputAt = bindLocalSpeech && locallyObservedAt
-        ? locallyObservedAt
-        : performance.now();
-    }
-  }
-
-  private markFirstOutput(): void {
-    if (!this.firstOutputAt) this.firstOutputAt = performance.now();
   }
 
   private hasActiveTurnData(): boolean {
-    return Boolean(this.currentInputText || this.currentInterimInput || this.currentOutputText);
+    return this.turns.hasBufferedData();
   }
 
   private hasTurnData(): boolean {
-    return this.hasActiveTurnData() ||
-      Boolean(this.pendingCompletedTurn) ||
-      Boolean(this.unattributedSpeechStartedAt) ||
-      Boolean(this.deferredInputText);
+    return this.hasActiveTurnData() || Boolean(this.unattributedSpeechStartedAt);
   }
 
-  private freezeCurrentTurn(runLifecycle = true): void {
-    if (!this.hasActiveTurnData()) {
-      if (runLifecycle) this.maybeFinishLifecycle();
-      return;
-    }
-    if (this.pendingCompletedTurn) this.flushPendingCompletedTurn(false);
-
-    const sourceText = (this.currentInputText || this.currentInterimInput).trim();
-    const translatedText = this.currentOutputText.trim();
-    const latencyMs = this.turnInputAt && this.firstOutputAt
-      ? Math.max(0, Math.round(this.firstOutputAt - this.turnInputAt))
-      : 0;
-    // If output completed before its independent input transcription arrived,
-    // the pending turn claims the local speech marker. A marker left after a
-    // sourced turn instead belongs to possible follow-up speech.
-    const claimedInputStartedAt = !sourceText && !this.deferredInputText
-      ? this.unattributedSpeechStartedAt
-      : 0;
-    if (claimedInputStartedAt) this.unattributedSpeechStartedAt = 0;
-
-    this.pendingCompletedTurn = {
-      sourceText,
-      translatedText,
-      sourceLanguageCode: this.sessionSourceLanguageCode,
-      targetLanguageCode: this.sessionTargetLanguageCode,
-      latencyMs,
-      hasFinalInput: Boolean(this.currentInputText),
-      claimedInputStartedAt,
-      timerId: null,
-    };
-
-    this.currentInputText = '';
-    this.currentInterimInput = '';
-    this.currentOutputText = '';
-    this.turnInputAt = this.unattributedSpeechStartedAt;
-    this.firstOutputAt = 0;
-    if (!this.pendingCompletedTurn.hasFinalInput && this.unattributedSpeechStartedAt) {
-      this.enterAmbiguousInputBarrier();
-    }
-    this.callbacks.onInputTranscript?.('', false);
-    this.callbacks.onOutputTranscript?.('');
-
-    this.pendingCompletedTurn.timerId = window.setTimeout(
-      () => this.flushPendingCompletedTurn(),
-      INPUT_TRANSCRIPT_GRACE_MS
-    );
-  }
-
-  private flushPendingCompletedTurn(runLifecycle = true): void {
-    const pending = this.pendingCompletedTurn;
-    if (!pending) {
-      if (runLifecycle) this.maybeFinishLifecycle();
-      return;
-    }
-    this.pendingCompletedTurn = null;
-    if (pending.timerId !== null) window.clearTimeout(pending.timerId);
-
-    if (!pending.hasFinalInput) {
-      this.orphanInputAwaitingFinal = true;
-      this.freshSessionRequested = true;
-      if (
-        this.unattributedSpeechStartedAt ||
-        this.deferredInputText ||
-        this.currentInputText ||
-        this.currentInterimInput ||
-        this.currentOutputText
-      ) {
-        this.enterAmbiguousInputBarrier();
-      }
-    }
-    if (pending.sourceText || pending.translatedText) {
-      this.callbacks.onTurnComplete?.({
-        sourceText: pending.sourceText,
-        translatedText: pending.translatedText,
-        sourceLanguageCode: pending.sourceLanguageCode,
-        targetLanguageCode: pending.targetLanguageCode,
-        latencyMs: pending.latencyMs,
-      });
-    }
-    this.promoteDeferredInput();
-    if (runLifecycle) this.maybeFinishLifecycle();
-  }
-
-  private flushCurrentTurnImmediately(runLifecycle = true): void {
-    if (this.hasActiveTurnData()) this.freezeCurrentTurn(false);
-    this.flushPendingCompletedTurn(false);
-    this.promoteDeferredInput();
-    if (this.hasActiveTurnData()) this.freezeCurrentTurn(false);
-    this.flushPendingCompletedTurn(runLifecycle);
+  private flushCurrentTurnImmediately(_runLifecycle = true): void {
+    this.turns.flush();
+    this.publishTurnPreviews();
+    if (_runLifecycle) this.maybeFinishLifecycle();
   }
 
   private maybeFinishLifecycle(): void {
@@ -1026,16 +712,6 @@ export class GeminiLiveSocketService implements LiveTranslationService {
         : this.stopMinimumDrainElapsed)
     ) {
       this.cleanup(true);
-      return;
-    }
-    if (
-      this.freshSessionRequested &&
-      !this.intentionalClose &&
-      !this.isStopping &&
-      !this.hasTurnData() &&
-      this.terminalTurnCompleteDebt === 0
-    ) {
-      this.reconnectFreshSession();
       return;
     }
     if (
@@ -1259,7 +935,6 @@ export class GeminiLiveSocketService implements LiveTranslationService {
     this.stopNeedsNewCompletion = Boolean(
       this.hasActiveTurnData() ||
       this.unattributedSpeechStartedAt ||
-      this.deferredInputText ||
       this.lastPotentialSpeechAt > this.lastServerCompletionAt
     );
     this.stopDrainArmed = true;
@@ -1279,7 +954,6 @@ export class GeminiLiveSocketService implements LiveTranslationService {
       this.drainCompletionSeen = true;
       this.flushCurrentTurnImmediately(false);
       this.unattributedSpeechStartedAt = 0;
-      this.turnInputAt = 0;
       if (this.isStopping) this.cleanup(true);
     }, STOP_DRAIN_TIMEOUT_MS);
 
@@ -1357,49 +1031,6 @@ export class GeminiLiveSocketService implements LiveTranslationService {
       });
   }
 
-  /**
-   * Create a non-resumed boundary after input transcription became impossible
-   * to attribute safely. Existing output audio keeps playing while the old
-   * microphone/socket are replaced.
-   */
-  private reconnectFreshSession(): void {
-    if (
-      this.intentionalClose ||
-      this.isStopping ||
-      this.isReconnecting ||
-      !this.sessionApiKey ||
-      !this.sessionTargetLanguageCode ||
-      this.hasTurnData() ||
-      this.terminalTurnCompleteDebt > 0
-    ) return;
-
-    const apiKey = this.sessionApiKey;
-    const targetLanguageCode = this.sessionTargetLanguageCode;
-    const attempt = ++this.openAttempt;
-    this.isReconnecting = true;
-    this.reconnectRequested = false;
-    this.sessionResumptionHandle = null;
-    this.sessionCurrentlyResumable = false;
-
-    void this.openSession(apiKey, targetLanguageCode, null, false, true)
-      .then(() => {
-        if (attempt === this.openAttempt) {
-          this.isReconnecting = false;
-          this.maybeFinishLifecycle();
-        }
-      })
-      .catch((error) => {
-        if (attempt !== this.openAttempt) return;
-        this.isReconnecting = false;
-        this.flushCurrentTurnImmediately(false);
-        this.cleanup(false);
-        this.callbacks.onStatusChange?.('error');
-        this.callbacks.onError?.(
-          `Could not reset the input transcription boundary: ${error instanceof Error ? error.message : String(error)}`
-        );
-      });
-  }
-
   private cleanup(
     notify: boolean,
     preserveSession = false,
@@ -1445,23 +1076,10 @@ export class GeminiLiveSocketService implements LiveTranslationService {
     this.pendingInput = new Int16Array(0);
     this.resetResampler();
     if (!preserveTurn) {
-      const pendingTurnTimer = this.pendingCompletedTurn?.timerId;
-      if (pendingTurnTimer != null) window.clearTimeout(pendingTurnTimer);
-      this.pendingCompletedTurn = null;
-      this.currentInputText = '';
-      this.currentInterimInput = '';
-      this.currentOutputText = '';
-      this.deferredInputText = '';
-      this.deferredInputIsFinal = false;
-      this.deferredInputAt = 0;
-      this.turnInputAt = 0;
-      this.firstOutputAt = 0;
+      this.turns.reset();
       this.lastPotentialSpeechAt = 0;
       this.lastServerCompletionAt = 0;
       this.unattributedSpeechStartedAt = 0;
-      this.orphanInputAwaitingFinal = false;
-      this.dropInputUntilFreshSession = false;
-      this.freshSessionRequested = false;
       this.terminalTurnCompleteDebt = 0;
       this.completionSerial = 0;
     }

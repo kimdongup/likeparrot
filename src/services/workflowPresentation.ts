@@ -33,14 +33,18 @@ interface LocalePack {
     desktopChromeLocal: string;
     desktopWebSpeechGemini: string;
     desktopWebSpeechAzure: string;
+    mobileBergamot: string;
     mobileGemini: string;
     mobileAzure: string;
     geminiLiveDescription: string;
     openAiLiveDescription: string;
+    azureLiveInterpreterDescription: string;
+    azureSpeechTranslationDescription: string;
     localFastDescription: string;
     localStableDescription: string;
     desktopGeminiDescription: string;
     desktopAzureDescription: string;
+    mobileBergamotDescription: string;
     mobileGeminiDescription: string;
     mobileAzureDescription: string;
   };
@@ -87,6 +91,7 @@ interface LocalePack {
     geminiKey: string;
     openAiKey: string;
     azureKey: string;
+    azureSpeechKey: string;
     microphone: string;
     secure: string;
     websocketAudio: string;
@@ -94,6 +99,7 @@ interface LocalePack {
     desktopChrome: string;
     webSpeech: string;
     chromeTranslator: string;
+    bergamot: string;
     desktopWebSpeech: string;
     network: string;
     deviceVoice: string;
@@ -106,6 +112,7 @@ interface LocalePack {
     geminiKey: string;
     openAiKey: string;
     azureKey: string;
+    azureSpeechKey: string;
     cloudFallbackOff: string;
     mobileNeedsProvider: string;
     noCompleteFlow: string;
@@ -134,13 +141,17 @@ const EN: LocalePack = {
     automaticLabel: 'Automatic routing (smart fallback)', automaticDescription: 'Choose a complete workflow from device capabilities, saved credentials, and the cloud-fallback setting.',
     fast: 'fast', stable: 'stable', desktopChromeLocal: 'Desktop Chrome on-device',
     desktopWebSpeechGemini: 'Desktop Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'Desktop Web Speech + Azure AI Translator',
+    mobileBergamot: 'Mobile keyboard dictation + Bergamot',
     mobileGemini: 'Mobile keyboard dictation + Gemini 3.5 Flash-Lite', mobileAzure: 'Mobile keyboard dictation + Azure AI Translator',
     geminiLiveDescription: 'Microphone audio and translated audio share one bidirectional Gemini Live session; available text is saved locally.',
     openAiLiveDescription: 'Microphone audio and translated audio share one bidirectional OpenAI Realtime session; available text is saved locally.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: 'Desktop Web Speech input with a short endpoint delay, Chrome on-device translation, and device TTS.',
     localStableDescription: 'Desktop Web Speech input with a longer endpoint delay, Chrome on-device translation, and device TTS.',
     desktopGeminiDescription: 'Stable desktop Web Speech input, Gemini text translation, and device TTS.',
     desktopAzureDescription: 'Stable desktop Web Speech input, Azure text translation, and device TTS.',
+    mobileBergamotDescription: 'Editable keyboard dictation or typing, on-device Bergamot translation, and device TTS. The first language pair downloads a compact model, then text stays on this device.',
     mobileGeminiDescription: 'Editable keyboard dictation or typing, Gemini text translation, and device TTS.',
     mobileAzureDescription: 'Editable keyboard dictation or typing, Azure text translation, and device TTS.',
   },
@@ -168,8 +179,10 @@ const EN: LocalePack = {
   requirements: {
     completeFlow: 'At least one complete workflow below must be available.', dictationIsInput: 'Keyboard dictation creates text; it is not a translation engine.',
     geminiKey: 'Saved Gemini API key', openAiKey: 'Saved OpenAI API key', azureKey: 'Saved Azure Translator key and region when required',
+    azureSpeechKey: 'Saved Azure Speech key and region',
     microphone: 'Microphone permission', secure: 'Secure HTTPS connection', websocketAudio: 'WebSocket and Web Audio support', webrtc: 'WebRTC support',
     desktopChrome: 'Desktop Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API and downloaded language pack',
+    bergamot: 'WebAssembly workers for on-device Bergamot',
     desktopWebSpeech: 'Desktop browser with Web Speech support', network: 'Network connection', deviceVoice: 'Installed target-language TTS voice',
     mobileKeyboard: 'Phone or tablet keyboard', startKeyboardDictation: 'You start dictation from the keyboard microphone',
   },
@@ -178,12 +191,14 @@ const EN: LocalePack = {
     webrtc: 'WebRTC support', audio_context: 'Web Audio support', desktop_device: 'a desktop or laptop', desktop_chrome: 'desktop Chrome',
     mobile_device: 'a phone or tablet', web_speech: 'the Web Speech API', translator_api: 'the Chrome Translator API',
     speech_synthesis: 'device text-to-speech', editable_text: 'editable text input',
+    web_assembly: 'WebAssembly workers',
   },
   disabled: {
     requires: 'Requires {items}.', geminiKey: 'Save a Gemini API key in Settings.', openAiKey: 'Save an OpenAI API key in Settings.',
     azureKey: 'Save an Azure Translator API key in Settings.',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: 'Automatic cloud fallback is off. Choose a cloud workflow explicitly or enable cloud fallback in Settings.',
-    mobileNeedsProvider: 'Mobile keyboard dictation only creates text. Save a Gemini or Azure Translator API key to translate it.',
+    mobileNeedsProvider: 'Mobile keyboard dictation only creates text. Use Bergamot on this device, or save a Gemini or Azure Translator API key.',
     noCompleteFlow: 'No complete workflow matches this device and the currently saved API keys.',
   },
 };
@@ -209,13 +224,17 @@ const KO: LocalePack = {
     automaticLabel: '자동 경로 선택(스마트 대체)', automaticDescription: '기기 기능, 저장된 API 키, 클라우드 대체 설정에 맞는 완전한 워크플로를 선택합니다.',
     fast: '빠름', stable: '안정형', desktopChromeLocal: '데스크탑 Chrome 기기 내 번역',
     desktopWebSpeechGemini: '데스크탑 Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: '데스크탑 Web Speech + Azure AI Translator',
+    mobileBergamot: '모바일 키보드 받아쓰기 + Bergamot',
     mobileGemini: '모바일 키보드 받아쓰기 + Gemini 3.5 Flash-Lite', mobileAzure: '모바일 키보드 받아쓰기 + Azure AI Translator',
     geminiLiveDescription: '마이크 입력과 번역 음성이 하나의 Gemini Live 양방향 세션을 이용하고, 제공되는 텍스트는 기기에 저장됩니다.',
     openAiLiveDescription: '마이크 입력과 번역 음성이 하나의 OpenAI Realtime 양방향 세션을 이용하고, 제공되는 텍스트는 기기에 저장됩니다.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter가 마이크 오디오를 음성-음성 통역으로 스트리밍하며 입력 언어를 자동 감지합니다.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation이 마이크 오디오를 스트리밍하고 원문 전사와 합성된 대상 언어 음성을 제공합니다.',
     localFastDescription: '짧은 발화 종료 지연의 데스크탑 Web Speech 입력, Chrome 기기 내 번역, 기기 TTS 조합입니다.',
     localStableDescription: '더 긴 발화 종료 지연의 데스크탑 Web Speech 입력, Chrome 기기 내 번역, 기기 TTS 조합입니다.',
     desktopGeminiDescription: '안정형 데스크탑 Web Speech 입력, Gemini 텍스트 번역, 기기 TTS 조합입니다.',
     desktopAzureDescription: '안정형 데스크탑 Web Speech 입력, Azure 텍스트 번역, 기기 TTS 조합입니다.',
+    mobileBergamotDescription: '수정 가능한 키보드 받아쓰기 또는 입력, 기기 내 Bergamot 번역, 기기 TTS 조합입니다. 언어쌍 모델을 처음 한 번 받은 뒤에는 텍스트가 이 기기에 머뭅니다.',
     mobileGeminiDescription: '수정 가능한 키보드 받아쓰기 또는 입력, Gemini 텍스트 번역, 기기 TTS 조합입니다.',
     mobileAzureDescription: '수정 가능한 키보드 받아쓰기 또는 입력, Azure 텍스트 번역, 기기 TTS 조합입니다.',
   },
@@ -242,9 +261,10 @@ const KO: LocalePack = {
   },
   requirements: {
     completeFlow: '아래 워크플로 중 하나 이상을 완전히 사용할 수 있어야 합니다.', dictationIsInput: '키보드 받아쓰기는 텍스트 입력 도구이며 번역 엔진이 아닙니다.',
-    geminiKey: '저장된 Gemini API 키', openAiKey: '저장된 OpenAI API 키', azureKey: '저장된 Azure Translator API 키와 필요한 경우 리전',
+    geminiKey: '저장된 Gemini API 키', openAiKey: '저장된 OpenAI API 키', azureKey: '저장된 Azure Translator API 키와 필요한 경우 리전', azureSpeechKey: '저장된 Azure Speech 키와 리전',
     microphone: '마이크 권한', secure: '안전한 HTTPS 연결', websocketAudio: 'WebSocket과 Web Audio 지원', webrtc: 'WebRTC 지원',
     desktopChrome: '데스크탑 Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API와 내려받은 언어 팩',
+    bergamot: '기기 내 Bergamot를 위한 WebAssembly 워커',
     desktopWebSpeech: 'Web Speech를 지원하는 데스크탑 브라우저', network: '네트워크 연결', deviceVoice: '설치된 대상 언어 TTS 음성',
     mobileKeyboard: '휴대전화 또는 태블릿 키보드', startKeyboardDictation: '사용자가 키보드 마이크에서 받아쓰기를 시작해야 함',
   },
@@ -253,12 +273,14 @@ const KO: LocalePack = {
     audio_context: 'Web Audio 지원', desktop_device: '데스크탑 또는 노트북', desktop_chrome: '데스크탑 Chrome',
     mobile_device: '휴대전화 또는 태블릿', web_speech: 'Web Speech API', translator_api: 'Chrome Translator API',
     speech_synthesis: '기기 텍스트 읽기 기능', editable_text: '수정 가능한 텍스트 입력',
+    web_assembly: 'WebAssembly 워커',
   },
   disabled: {
     requires: '{items}이(가) 필요합니다.', geminiKey: '설정에 Gemini API 키를 저장하세요.', openAiKey: '설정에 OpenAI API 키를 저장하세요.',
     azureKey: '설정에 Azure Translator API 키를 저장하세요.',
+    azureSpeechKey: '설정에 Azure Speech API 키와 리전을 저장하세요.',
     cloudFallbackOff: '자동 클라우드 대체가 꺼져 있습니다. 클라우드 워크플로를 직접 선택하거나 설정에서 클라우드 대체를 켜세요.',
-    mobileNeedsProvider: '모바일 키보드 받아쓰기는 텍스트만 만듭니다. 번역하려면 Gemini 또는 Azure Translator API 키를 저장하세요.',
+    mobileNeedsProvider: '모바일 키보드 받아쓰기는 텍스트만 만듭니다. 이 기기에서 Bergamot를 쓰거나 Gemini 또는 Azure Translator API 키를 저장하세요.',
     noCompleteFlow: '이 기기와 현재 저장된 API 키로 실행할 수 있는 전체 워크플로가 없습니다.',
   },
 };
@@ -284,13 +306,17 @@ const JA: LocalePack = {
     automaticLabel: '自動ルーティング（スマート代替）', automaticDescription: '端末機能、保存済み API キー、クラウド代替設定から完全なワークフローを選びます。',
     fast: '高速', stable: '安定', desktopChromeLocal: 'デスクトップ Chrome オンデバイス翻訳',
     desktopWebSpeechGemini: 'デスクトップ Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'デスクトップ Web Speech + Azure AI Translator',
+    mobileBergamot: 'モバイルキーボード音声入力 + Bergamot',
     mobileGemini: 'モバイルキーボード音声入力 + Gemini 3.5 Flash-Lite', mobileAzure: 'モバイルキーボード音声入力 + Azure AI Translator',
     geminiLiveDescription: 'マイク音声と翻訳音声を一つの双方向 Gemini Live セッションで処理し、提供されたテキストを端末内に保存します。',
     openAiLiveDescription: 'マイク音声と翻訳音声を一つの双方向 OpenAI Realtime セッションで処理し、提供されたテキストを端末内に保存します。',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: '短い発話終了待ちの Web Speech 入力、Chrome の端末内翻訳、端末 TTS を使用します。',
     localStableDescription: '長めの発話終了待ちの Web Speech 入力、Chrome の端末内翻訳、端末 TTS を使用します。',
     desktopGeminiDescription: '安定型デスクトップ Web Speech 入力、Gemini テキスト翻訳、端末 TTS を使用します。',
     desktopAzureDescription: '安定型デスクトップ Web Speech 入力、Azure テキスト翻訳、端末 TTS を使用します。',
+    mobileBergamotDescription: '編集可能なキーボード音声入力または文字入力、端末内 Bergamot 翻訳、端末 TTS を使用します。',
     mobileGeminiDescription: '編集可能なキーボード音声入力または文字入力、Gemini テキスト翻訳、端末 TTS を使用します。',
     mobileAzureDescription: '編集可能なキーボード音声入力または文字入力、Azure テキスト翻訳、端末 TTS を使用します。',
   },
@@ -317,8 +343,10 @@ const JA: LocalePack = {
   requirements: {
     completeFlow: '以下の完全なワークフローを少なくとも一つ利用できる必要があります。', dictationIsInput: 'キーボード音声入力はテキスト入力手段であり、翻訳エンジンではありません。',
     geminiKey: '保存済み Gemini API キー', openAiKey: '保存済み OpenAI API キー', azureKey: '保存済み Azure Translator API キーと、必要な場合はリージョン',
+    azureSpeechKey: '保存済み Azure Speech キーとリージョン',
     microphone: 'マイク権限', secure: '安全な HTTPS 接続', websocketAudio: 'WebSocket と Web Audio 対応', webrtc: 'WebRTC 対応',
     desktopChrome: 'デスクトップ Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API とダウンロード済み言語パック',
+    bergamot: '端末内 Bergamot 用の WebAssembly ワーカー',
     desktopWebSpeech: 'Web Speech 対応デスクトップブラウザ', network: 'ネットワーク接続', deviceVoice: 'インストール済み対象言語 TTS 音声',
     mobileKeyboard: 'スマートフォンまたはタブレットのキーボード', startKeyboardDictation: '利用者がキーボードのマイクから音声入力を開始すること',
   },
@@ -327,10 +355,12 @@ const JA: LocalePack = {
     audio_context: 'Web Audio 対応', desktop_device: 'デスクトップまたはノートパソコン', desktop_chrome: 'デスクトップ Chrome',
     mobile_device: 'スマートフォンまたはタブレット', web_speech: 'Web Speech API', translator_api: 'Chrome Translator API',
     speech_synthesis: '端末のテキスト読み上げ', editable_text: '編集可能なテキスト入力',
+    web_assembly: 'WebAssembly ワーカー',
   },
   disabled: {
     requires: '{items} が必要です。', geminiKey: '設定に Gemini API キーを保存してください。', openAiKey: '設定に OpenAI API キーを保存してください。',
     azureKey: '設定に Azure Translator API キーを保存してください。',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: '自動クラウド代替が無効です。クラウドワークフローを直接選ぶか、設定でクラウド代替を有効にしてください。',
     mobileNeedsProvider: 'モバイルキーボード音声入力はテキストだけを作ります。翻訳には Gemini または Azure Translator API キーを保存してください。',
     noCompleteFlow: 'この端末と現在保存されている API キーに合う完全なワークフローがありません。',
@@ -358,12 +388,16 @@ const ZH_TW: LocalePack = {
     automaticLabel: '自動路由（智慧備援）', automaticDescription: '依裝置功能、已儲存的 API 金鑰與雲端備援設定選擇完整工作流程。',
     fast: '快速', stable: '穩定', desktopChromeLocal: '桌面版 Chrome 裝置端翻譯',
     desktopWebSpeechGemini: '桌面 Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: '桌面 Web Speech + Azure AI Translator',
+    mobileBergamot: '行動鍵盤語音輸入 + Bergamot',
     mobileGemini: '行動鍵盤語音輸入 + Gemini 3.5 Flash-Lite', mobileAzure: '行動鍵盤語音輸入 + Azure AI Translator',
     geminiLiveDescription: '麥克風音訊與翻譯音訊共用一個雙向 Gemini Live 工作階段，並在本機儲存可取得的文字。',
     openAiLiveDescription: '麥克風音訊與翻譯音訊共用一個雙向 OpenAI Realtime 工作階段，並在本機儲存可取得的文字。',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: '使用較短收音結束延遲的桌面 Web Speech、Chrome 裝置端翻譯及裝置 TTS。',
     localStableDescription: '使用較長收音結束延遲的桌面 Web Speech、Chrome 裝置端翻譯及裝置 TTS。',
     desktopGeminiDescription: '穩定型桌面 Web Speech 輸入、Gemini 文字翻譯與裝置 TTS。', desktopAzureDescription: '穩定型桌面 Web Speech 輸入、Azure 文字翻譯與裝置 TTS。',
+    mobileBergamotDescription: '可編輯的鍵盤語音或文字輸入、裝置端 Bergamot 翻譯與裝置 TTS。',
     mobileGeminiDescription: '可編輯的鍵盤語音或文字輸入、Gemini 文字翻譯與裝置 TTS。', mobileAzureDescription: '可編輯的鍵盤語音或文字輸入、Azure 文字翻譯與裝置 TTS。',
   },
   flow: {
@@ -389,8 +423,10 @@ const ZH_TW: LocalePack = {
   requirements: {
     completeFlow: '下列完整工作流程中至少要有一個可用。', dictationIsInput: '鍵盤語音輸入只會產生文字，並不是翻譯引擎。',
     geminiKey: '已儲存的 Gemini API 金鑰', openAiKey: '已儲存的 OpenAI API 金鑰', azureKey: '已儲存的 Azure Translator API 金鑰，以及需要時的區域',
+    azureSpeechKey: '已儲存的 Azure Speech 金鑰與區域',
     microphone: '麥克風權限', secure: '安全的 HTTPS 連線', websocketAudio: '支援 WebSocket 與 Web Audio', webrtc: '支援 WebRTC',
     desktopChrome: '桌面版 Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API 與已下載的語言套件',
+    bergamot: '裝置端 Bergamot 所需的 WebAssembly worker',
     desktopWebSpeech: '支援 Web Speech 的桌面瀏覽器', network: '網路連線', deviceVoice: '已安裝的目標語言 TTS 語音',
     mobileKeyboard: '手機或平板鍵盤', startKeyboardDictation: '由使用者從鍵盤麥克風啟動語音輸入',
   },
@@ -399,10 +435,12 @@ const ZH_TW: LocalePack = {
     audio_context: 'Web Audio 支援', desktop_device: '桌上型或筆記型電腦', desktop_chrome: '桌面版 Chrome',
     mobile_device: '手機或平板', web_speech: 'Web Speech API', translator_api: 'Chrome Translator API',
     speech_synthesis: '裝置文字轉語音', editable_text: '可編輯文字輸入',
+    web_assembly: 'WebAssembly worker',
   },
   disabled: {
     requires: '需要 {items}。', geminiKey: '請在設定中儲存 Gemini API 金鑰。', openAiKey: '請在設定中儲存 OpenAI API 金鑰。',
     azureKey: '請在設定中儲存 Azure Translator API 金鑰。',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: '自動雲端備援已關閉。請直接選擇雲端工作流程，或在設定中開啟雲端備援。',
     mobileNeedsProvider: '行動鍵盤語音輸入只會產生文字。請儲存 Gemini 或 Azure Translator API 金鑰以進行翻譯。',
     noCompleteFlow: '沒有符合此裝置和目前已儲存 API 金鑰的完整工作流程。',
@@ -432,12 +470,16 @@ const ZH: LocalePack = {
     automaticLabel: '自动路由（智能回退）', automaticDescription: '根据设备功能、已保存的 API 密钥和云端回退设置选择完整工作流程。',
     fast: '快速', stable: '稳定', desktopChromeLocal: '桌面版 Chrome 设备端翻译',
     desktopWebSpeechGemini: '桌面 Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: '桌面 Web Speech + Azure AI Translator',
+    mobileBergamot: '移动键盘语音输入 + Bergamot',
     mobileGemini: '移动键盘语音输入 + Gemini 3.5 Flash-Lite', mobileAzure: '移动键盘语音输入 + Azure AI Translator',
     geminiLiveDescription: '麦克风音频和翻译音频共用一个双向 Gemini Live 会话，并在本机保存可用文本。',
     openAiLiveDescription: '麦克风音频和翻译音频共用一个双向 OpenAI Realtime 会话，并在本机保存可用文本。',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: '使用较短结束等待的桌面 Web Speech 输入、Chrome 设备端翻译和设备 TTS。',
     localStableDescription: '使用较长结束等待的桌面 Web Speech 输入、Chrome 设备端翻译和设备 TTS。',
     desktopGeminiDescription: '稳定型桌面 Web Speech 输入、Gemini 文本翻译和设备 TTS。', desktopAzureDescription: '稳定型桌面 Web Speech 输入、Azure 文本翻译和设备 TTS。',
+    mobileBergamotDescription: '可编辑的键盘语音或文字输入、设备端 Bergamot 翻译和设备 TTS。',
     mobileGeminiDescription: '可编辑的键盘语音或文字输入、Gemini 文本翻译和设备 TTS。', mobileAzureDescription: '可编辑的键盘语音或文字输入、Azure 文本翻译和设备 TTS。',
   },
   flow: {
@@ -463,8 +505,10 @@ const ZH: LocalePack = {
   requirements: {
     completeFlow: '下列完整工作流程中至少要有一个可用。', dictationIsInput: '键盘语音输入只会生成文本，并不是翻译引擎。',
     geminiKey: '已保存的 Gemini API 密钥', openAiKey: '已保存的 OpenAI API 密钥', azureKey: '已保存的 Azure Translator API 密钥以及需要时的区域',
+    azureSpeechKey: '已保存的 Azure Speech 密钥和区域',
     microphone: '麦克风权限', secure: '安全的 HTTPS 连接', websocketAudio: '支持 WebSocket 和 Web Audio', webrtc: '支持 WebRTC',
     desktopChrome: '桌面版 Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API 和已下载的语言包',
+    bergamot: '设备端 Bergamot 所需的 WebAssembly worker',
     desktopWebSpeech: '支持 Web Speech 的桌面浏览器', network: '网络连接', deviceVoice: '已安装的目标语言 TTS 语音',
     mobileKeyboard: '手机或平板键盘', startKeyboardDictation: '由用户从键盘麦克风启动语音输入',
   },
@@ -472,10 +516,12 @@ const ZH: LocalePack = {
     secure_context: '安全的 HTTPS 连接', microphone_capture: '浏览器麦克风采集', websocket: 'WebSocket 支持', webrtc: 'WebRTC 支持',
     audio_context: 'Web Audio 支持', desktop_device: '台式机或笔记本电脑', desktop_chrome: '桌面版 Chrome', mobile_device: '手机或平板',
     web_speech: 'Web Speech API', translator_api: 'Chrome Translator API', speech_synthesis: '设备文本转语音', editable_text: '可编辑文本输入',
+    web_assembly: 'WebAssembly worker',
   },
   disabled: {
     requires: '需要 {items}。', geminiKey: '请在设置中保存 Gemini API 密钥。', openAiKey: '请在设置中保存 OpenAI API 密钥。',
     azureKey: '请在设置中保存 Azure Translator API 密钥。',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: '自动云端回退已关闭。请直接选择云端工作流程，或在设置中启用云端回退。',
     mobileNeedsProvider: '移动键盘语音输入只会生成文本。请保存 Gemini 或 Azure Translator API 密钥以进行翻译。',
     noCompleteFlow: '没有符合此设备和当前已保存 API 密钥的完整工作流程。',
@@ -504,13 +550,17 @@ const ES: LocalePack = {
     automaticLabel: 'Ruta automática (alternativa inteligente)', automaticDescription: 'Elige un flujo completo según el dispositivo, las claves API guardadas y la opción de alternativa en la nube.',
     fast: 'rápido', stable: 'estable', desktopChromeLocal: 'Chrome de escritorio, traducción en el dispositivo',
     desktopWebSpeechGemini: 'Web Speech de escritorio + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'Web Speech de escritorio + Azure AI Translator',
+    mobileBergamot: 'Dictado con teclado móvil + Bergamot',
     mobileGemini: 'Dictado con teclado móvil + Gemini 3.5 Flash-Lite', mobileAzure: 'Dictado con teclado móvil + Azure AI Translator',
     geminiLiveDescription: 'El audio del micrófono y el traducido comparten una sesión bidireccional de Gemini Live; el texto disponible se guarda localmente.',
     openAiLiveDescription: 'El audio del micrófono y el traducido comparten una sesión bidireccional de OpenAI Realtime; el texto disponible se guarda localmente.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: 'Web Speech de escritorio con pausa final corta, traducción de Chrome en el dispositivo y TTS del dispositivo.',
     localStableDescription: 'Web Speech de escritorio con pausa final más larga, traducción de Chrome en el dispositivo y TTS del dispositivo.',
     desktopGeminiDescription: 'Entrada estable con Web Speech de escritorio, traducción de texto con Gemini y TTS del dispositivo.',
     desktopAzureDescription: 'Entrada estable con Web Speech de escritorio, traducción de texto con Azure y TTS del dispositivo.',
+    mobileBergamotDescription: 'Dictado editable o escritura con teclado, traducción Bergamot en el dispositivo y TTS del dispositivo.',
     mobileGeminiDescription: 'Dictado editable o escritura con teclado, traducción con Gemini y TTS del dispositivo.',
     mobileAzureDescription: 'Dictado editable o escritura con teclado, traducción con Azure y TTS del dispositivo.',
   },
@@ -538,8 +588,10 @@ const ES: LocalePack = {
   requirements: {
     completeFlow: 'Debe estar disponible al menos uno de los flujos completos siguientes.', dictationIsInput: 'El dictado del teclado crea texto; no es un motor de traducción.',
     geminiKey: 'Clave API de Gemini guardada', openAiKey: 'Clave API de OpenAI guardada', azureKey: 'Clave de Azure Translator guardada y región cuando sea necesaria',
+    azureSpeechKey: 'Clave y región de Azure Speech guardadas',
     microphone: 'Permiso para el micrófono', secure: 'Conexión HTTPS segura', websocketAudio: 'Compatibilidad con WebSocket y Web Audio', webrtc: 'Compatibilidad con WebRTC',
     desktopChrome: 'Chrome de escritorio', webSpeech: 'API Web Speech', chromeTranslator: 'API Chrome Translator y paquete de idioma descargado',
+    bergamot: 'Workers de WebAssembly para Bergamot en el dispositivo',
     desktopWebSpeech: 'Navegador de escritorio compatible con Web Speech', network: 'Conexión de red', deviceVoice: 'Voz TTS instalada para el idioma de destino',
     mobileKeyboard: 'Teclado de teléfono o tableta', startKeyboardDictation: 'El usuario inicia el dictado desde el micrófono del teclado',
   },
@@ -548,10 +600,12 @@ const ES: LocalePack = {
     webrtc: 'compatibilidad con WebRTC', audio_context: 'compatibilidad con Web Audio', desktop_device: 'un equipo de escritorio o portátil',
     desktop_chrome: 'Chrome de escritorio', mobile_device: 'un teléfono o una tableta', web_speech: 'la API Web Speech',
     translator_api: 'la API Chrome Translator', speech_synthesis: 'texto a voz del dispositivo', editable_text: 'entrada de texto editable',
+    web_assembly: 'workers de WebAssembly',
   },
   disabled: {
     requires: 'Requiere {items}.', geminiKey: 'Guarda una clave API de Gemini en Ajustes.', openAiKey: 'Guarda una clave API de OpenAI en Ajustes.',
     azureKey: 'Guarda una clave API de Azure Translator en Ajustes.',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: 'La alternativa automática en la nube está desactivada. Elige un flujo de nube o actívala en Ajustes.',
     mobileNeedsProvider: 'El dictado del teclado móvil solo crea texto. Guarda una clave de Gemini o Azure Translator para traducirlo.',
     noCompleteFlow: 'Ningún flujo completo coincide con este dispositivo y las claves API guardadas.',
@@ -580,13 +634,17 @@ const FR: LocalePack = {
     automaticLabel: 'Routage automatique (repli intelligent)', automaticDescription: 'Choisit un flux complet selon l’appareil, les clés API enregistrées et le réglage de repli cloud.',
     fast: 'rapide', stable: 'stable', desktopChromeLocal: 'Chrome sur ordinateur, traduction locale',
     desktopWebSpeechGemini: 'Web Speech sur ordinateur + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'Web Speech sur ordinateur + Azure AI Translator',
+    mobileBergamot: 'Dictée au clavier mobile + Bergamot',
     mobileGemini: 'Dictée au clavier mobile + Gemini 3.5 Flash-Lite', mobileAzure: 'Dictée au clavier mobile + Azure AI Translator',
     geminiLiveDescription: 'L’audio du micro et l’audio traduit partagent une session bidirectionnelle Gemini Live ; le texte disponible est enregistré localement.',
     openAiLiveDescription: 'L’audio du micro et l’audio traduit partagent une session bidirectionnelle OpenAI Realtime ; le texte disponible est enregistré localement.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: 'Saisie Web Speech sur ordinateur avec délai de fin court, traduction locale Chrome et TTS de l’appareil.',
     localStableDescription: 'Saisie Web Speech sur ordinateur avec délai de fin plus long, traduction locale Chrome et TTS de l’appareil.',
     desktopGeminiDescription: 'Saisie Web Speech stable sur ordinateur, traduction texte Gemini et TTS de l’appareil.',
     desktopAzureDescription: 'Saisie Web Speech stable sur ordinateur, traduction texte Azure et TTS de l’appareil.',
+    mobileBergamotDescription: 'Dictée clavier modifiable ou saisie, traduction Bergamot sur l’appareil et TTS de l’appareil.',
     mobileGeminiDescription: 'Dictée clavier modifiable ou saisie, traduction texte Gemini et TTS de l’appareil.',
     mobileAzureDescription: 'Dictée clavier modifiable ou saisie, traduction texte Azure et TTS de l’appareil.',
   },
@@ -613,8 +671,10 @@ const FR: LocalePack = {
   requirements: {
     completeFlow: 'Au moins un des flux complets ci-dessous doit être disponible.', dictationIsInput: 'La dictée du clavier produit du texte ; ce n’est pas un moteur de traduction.',
     geminiKey: 'Clé API Gemini enregistrée', openAiKey: 'Clé API OpenAI enregistrée', azureKey: 'Clé Azure Translator enregistrée et région si nécessaire',
+    azureSpeechKey: 'Clé et région Azure Speech enregistrées',
     microphone: 'Autorisation du microphone', secure: 'Connexion HTTPS sécurisée', websocketAudio: 'Prise en charge de WebSocket et Web Audio', webrtc: 'Prise en charge de WebRTC',
     desktopChrome: 'Chrome sur ordinateur', webSpeech: 'API Web Speech', chromeTranslator: 'API Chrome Translator et pack de langue téléchargé',
+    bergamot: 'Workers WebAssembly pour Bergamot sur l’appareil',
     desktopWebSpeech: 'Navigateur de bureau compatible avec Web Speech', network: 'Connexion réseau', deviceVoice: 'Voix TTS cible installée',
     mobileKeyboard: 'Clavier de téléphone ou tablette', startKeyboardDictation: 'L’utilisateur lance la dictée depuis le microphone du clavier',
   },
@@ -623,10 +683,12 @@ const FR: LocalePack = {
     webrtc: 'la prise en charge de WebRTC', audio_context: 'la prise en charge de Web Audio', desktop_device: 'un ordinateur de bureau ou portable',
     desktop_chrome: 'Chrome sur ordinateur', mobile_device: 'un téléphone ou une tablette', web_speech: 'l’API Web Speech',
     translator_api: 'l’API Chrome Translator', speech_synthesis: 'la synthèse vocale de l’appareil', editable_text: 'une saisie de texte modifiable',
+    web_assembly: 'des workers WebAssembly',
   },
   disabled: {
     requires: 'Nécessite {items}.', geminiKey: 'Enregistrez une clé API Gemini dans les réglages.', openAiKey: 'Enregistrez une clé API OpenAI dans les réglages.',
     azureKey: 'Enregistrez une clé API Azure Translator dans les réglages.',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: 'Le repli automatique vers le cloud est désactivé. Choisissez un flux cloud ou activez le repli dans les réglages.',
     mobileNeedsProvider: 'La dictée du clavier mobile ne produit que du texte. Enregistrez une clé Gemini ou Azure Translator pour le traduire.',
     noCompleteFlow: 'Aucun flux complet ne correspond à cet appareil et aux clés API enregistrées.',
@@ -655,13 +717,17 @@ const DE: LocalePack = {
     automaticLabel: 'Automatische Route (intelligenter Rückgriff)', automaticDescription: 'Wählt anhand der Gerätefunktionen, gespeicherten API-Schlüssel und Cloud-Rückgriffseinstellung einen vollständigen Ablauf.',
     fast: 'schnell', stable: 'stabil', desktopChromeLocal: 'Desktop-Chrome, Übersetzung auf dem Gerät',
     desktopWebSpeechGemini: 'Desktop Web Speech + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'Desktop Web Speech + Azure AI Translator',
+    mobileBergamot: 'Diktat per mobiler Tastatur + Bergamot',
     mobileGemini: 'Diktat per mobiler Tastatur + Gemini 3.5 Flash-Lite', mobileAzure: 'Diktat per mobiler Tastatur + Azure AI Translator',
     geminiLiveDescription: 'Mikrofon- und Übersetzungsaudio laufen bidirektional in einer Gemini Live-Sitzung; verfügbarer Text wird lokal gespeichert.',
     openAiLiveDescription: 'Mikrofon- und Übersetzungsaudio laufen bidirektional in einer OpenAI Realtime-Sitzung; verfügbarer Text wird lokal gespeichert.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: 'Desktop Web Speech mit kurzer Sprechende-Wartezeit, lokale Chrome-Übersetzung und Geräte-TTS.',
     localStableDescription: 'Desktop Web Speech mit längerer Sprechende-Wartezeit, lokale Chrome-Übersetzung und Geräte-TTS.',
     desktopGeminiDescription: 'Stabile Desktop-Web-Speech-Eingabe, Gemini-Textübersetzung und Geräte-TTS.',
     desktopAzureDescription: 'Stabile Desktop-Web-Speech-Eingabe, Azure-Textübersetzung und Geräte-TTS.',
+    mobileBergamotDescription: 'Bearbeitbares Tastaturdiktat oder Texteingabe, Bergamot-Übersetzung auf dem Gerät und Geräte-TTS.',
     mobileGeminiDescription: 'Bearbeitbares Tastaturdiktat oder Texteingabe, Gemini-Textübersetzung und Geräte-TTS.',
     mobileAzureDescription: 'Bearbeitbares Tastaturdiktat oder Texteingabe, Azure-Textübersetzung und Geräte-TTS.',
   },
@@ -689,8 +755,10 @@ const DE: LocalePack = {
   requirements: {
     completeFlow: 'Mindestens einer der folgenden vollständigen Abläufe muss verfügbar sein.', dictationIsInput: 'Tastaturdiktat erzeugt Text; es ist keine Übersetzungsengine.',
     geminiKey: 'Gespeicherter Gemini-API-Schlüssel', openAiKey: 'Gespeicherter OpenAI-API-Schlüssel', azureKey: 'Gespeicherter Azure-Translator-Schlüssel und bei Bedarf Region',
+    azureSpeechKey: 'Gespeicherter Azure-Speech-Schlüssel und Region',
     microphone: 'Mikrofonberechtigung', secure: 'Sichere HTTPS-Verbindung', websocketAudio: 'WebSocket- und Web-Audio-Unterstützung', webrtc: 'WebRTC-Unterstützung',
     desktopChrome: 'Desktop-Chrome', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API und heruntergeladenes Sprachpaket',
+    bergamot: 'WebAssembly-Worker für Bergamot auf dem Gerät',
     desktopWebSpeech: 'Desktop-Browser mit Web-Speech-Unterstützung', network: 'Netzwerkverbindung', deviceVoice: 'Installierte TTS-Stimme der Zielsprache',
     mobileKeyboard: 'Telefon- oder Tablet-Tastatur', startKeyboardDictation: 'Der Nutzer startet das Diktat über das Tastaturmikrofon',
   },
@@ -699,10 +767,12 @@ const DE: LocalePack = {
     webrtc: 'WebRTC-Unterstützung', audio_context: 'Web-Audio-Unterstützung', desktop_device: 'einen Desktop oder Laptop', desktop_chrome: 'Desktop-Chrome',
     mobile_device: 'ein Telefon oder Tablet', web_speech: 'die Web Speech API', translator_api: 'die Chrome Translator API',
     speech_synthesis: 'Text-to-Speech des Geräts', editable_text: 'bearbeitbare Texteingabe',
+    web_assembly: 'WebAssembly-Worker',
   },
   disabled: {
     requires: 'Benötigt {items}.', geminiKey: 'Speichere einen Gemini-API-Schlüssel in den Einstellungen.', openAiKey: 'Speichere einen OpenAI-API-Schlüssel in den Einstellungen.',
     azureKey: 'Speichere einen Azure-Translator-API-Schlüssel in den Einstellungen.',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: 'Der automatische Cloud-Rückgriff ist aus. Wähle einen Cloud-Ablauf oder aktiviere ihn in den Einstellungen.',
     mobileNeedsProvider: 'Das mobile Tastaturdiktat erzeugt nur Text. Speichere zum Übersetzen einen Gemini- oder Azure-Translator-Schlüssel.',
     noCompleteFlow: 'Kein vollständiger Ablauf passt zu diesem Gerät und den gespeicherten API-Schlüsseln.',
@@ -731,13 +801,17 @@ const VI: LocalePack = {
     automaticLabel: 'Định tuyến tự động (chuyển hướng thông minh)', automaticDescription: 'Chọn quy trình hoàn chỉnh dựa trên khả năng thiết bị, khóa API đã lưu và cài đặt chuyển sang đám mây.',
     fast: 'nhanh', stable: 'ổn định', desktopChromeLocal: 'Chrome máy tính, dịch trên thiết bị',
     desktopWebSpeechGemini: 'Web Speech máy tính + Gemini 3.5 Flash-Lite', desktopWebSpeechAzure: 'Web Speech máy tính + Azure AI Translator',
+    mobileBergamot: 'Nhập giọng nói bằng bàn phím + Bergamot',
     mobileGemini: 'Nhập giọng nói bằng bàn phím + Gemini 3.5 Flash-Lite', mobileAzure: 'Nhập giọng nói bằng bàn phím + Azure AI Translator',
     geminiLiveDescription: 'Âm thanh mic và âm thanh dịch dùng chung một phiên Gemini Live hai chiều; văn bản có sẵn được lưu cục bộ.',
     openAiLiveDescription: 'Âm thanh mic và âm thanh dịch dùng chung một phiên OpenAI Realtime hai chiều; văn bản có sẵn được lưu cục bộ.',
+    azureLiveInterpreterDescription: 'Azure Speech Live Interpreter streams microphone audio to speech-to-speech translation with automatic source-language detection.',
+    azureSpeechTranslationDescription: 'Azure Speech Translation streams microphone audio, returns a source transcript, and plays synthesized target-language audio.',
     localFastDescription: 'Web Speech máy tính với thời gian chờ kết thúc ngắn, Chrome dịch trên thiết bị và TTS của thiết bị.',
     localStableDescription: 'Web Speech máy tính với thời gian chờ kết thúc dài hơn, Chrome dịch trên thiết bị và TTS của thiết bị.',
     desktopGeminiDescription: 'Đầu vào Web Speech ổn định trên máy tính, dịch văn bản Gemini và TTS của thiết bị.',
     desktopAzureDescription: 'Đầu vào Web Speech ổn định trên máy tính, dịch văn bản Azure và TTS của thiết bị.',
+    mobileBergamotDescription: 'Nhập giọng nói có thể sửa hoặc gõ bằng bàn phím, dịch Bergamot trên thiết bị và TTS của thiết bị.',
     mobileGeminiDescription: 'Nhập giọng nói có thể sửa hoặc gõ bằng bàn phím, dịch văn bản Gemini và TTS của thiết bị.',
     mobileAzureDescription: 'Nhập giọng nói có thể sửa hoặc gõ bằng bàn phím, dịch văn bản Azure và TTS của thiết bị.',
   },
@@ -764,8 +838,10 @@ const VI: LocalePack = {
   requirements: {
     completeFlow: 'Phải có ít nhất một quy trình hoàn chỉnh bên dưới dùng được.', dictationIsInput: 'Nhập giọng nói từ bàn phím chỉ tạo văn bản; đó không phải công cụ dịch.',
     geminiKey: 'Khóa API Gemini đã lưu', openAiKey: 'Khóa API OpenAI đã lưu', azureKey: 'Khóa Azure Translator đã lưu và khu vực nếu cần',
+    azureSpeechKey: 'Khóa và khu vực Azure Speech đã lưu',
     microphone: 'Quyền dùng mic', secure: 'Kết nối HTTPS an toàn', websocketAudio: 'Hỗ trợ WebSocket và Web Audio', webrtc: 'Hỗ trợ WebRTC',
     desktopChrome: 'Chrome trên máy tính', webSpeech: 'Web Speech API', chromeTranslator: 'Chrome Translator API và gói ngôn ngữ đã tải',
+    bergamot: 'Worker WebAssembly cho Bergamot trên thiết bị',
     desktopWebSpeech: 'Trình duyệt máy tính hỗ trợ Web Speech', network: 'Kết nối mạng', deviceVoice: 'Giọng TTS ngôn ngữ đích đã cài',
     mobileKeyboard: 'Bàn phím điện thoại hoặc máy tính bảng', startKeyboardDictation: 'Người dùng bắt đầu đọc từ mic bàn phím',
   },
@@ -774,10 +850,12 @@ const VI: LocalePack = {
     audio_context: 'hỗ trợ Web Audio', desktop_device: 'máy tính để bàn hoặc xách tay', desktop_chrome: 'Chrome trên máy tính',
     mobile_device: 'điện thoại hoặc máy tính bảng', web_speech: 'Web Speech API', translator_api: 'Chrome Translator API',
     speech_synthesis: 'đọc văn bản trên thiết bị', editable_text: 'ô nhập văn bản có thể sửa',
+    web_assembly: 'worker WebAssembly',
   },
   disabled: {
     requires: 'Cần {items}.', geminiKey: 'Hãy lưu khóa API Gemini trong Cài đặt.', openAiKey: 'Hãy lưu khóa API OpenAI trong Cài đặt.',
     azureKey: 'Hãy lưu khóa API Azure Translator trong Cài đặt.',
+    azureSpeechKey: 'Save an Azure Speech API key and region in Settings.',
     cloudFallbackOff: 'Chuyển hướng tự động sang đám mây đang tắt. Hãy chọn trực tiếp một quy trình đám mây hoặc bật tùy chọn này trong Cài đặt.',
     mobileNeedsProvider: 'Nhập giọng nói bằng bàn phím di động chỉ tạo văn bản. Hãy lưu khóa Gemini hoặc Azure Translator để dịch.',
     noCompleteFlow: 'Không có quy trình hoàn chỉnh nào phù hợp với thiết bị và các khóa API hiện đã lưu.',
@@ -820,10 +898,13 @@ const profileLabel = (id: WorkflowProfileId, pack: LocalePack): string => {
     case 'auto': return pack.terms.automaticLabel;
     case 'gemini-3.5-live-translate-preview': return 'Gemini 3.5 Live Translate Preview';
     case 'gpt-realtime-translate': return 'OpenAI GPT Realtime Translate';
+    case 'azure-speech-live-interpreter': return 'Azure Speech Live Interpreter';
+    case 'azure-speech-translation': return 'Azure Speech Translation';
     case 'desktop-chrome-on-device-fast': return `${pack.terms.desktopChromeLocal} — ${pack.terms.fast}`;
     case 'desktop-chrome-on-device-stable': return `${pack.terms.desktopChromeLocal} — ${pack.terms.stable}`;
     case 'desktop-webspeech-gemini-stable': return `${pack.terms.desktopWebSpeechGemini} — ${pack.terms.stable}`;
     case 'desktop-webspeech-azure-stable': return `${pack.terms.desktopWebSpeechAzure} — ${pack.terms.stable}`;
+    case 'mobile-dictation-bergamot': return pack.terms.mobileBergamot;
     case 'mobile-dictation-gemini': return pack.terms.mobileGemini;
     case 'mobile-dictation-azure': return pack.terms.mobileAzure;
   }
@@ -834,10 +915,13 @@ const profileDescription = (id: WorkflowProfileId, pack: LocalePack): string => 
     case 'auto': return pack.terms.automaticDescription;
     case 'gemini-3.5-live-translate-preview': return pack.terms.geminiLiveDescription;
     case 'gpt-realtime-translate': return pack.terms.openAiLiveDescription;
+    case 'azure-speech-live-interpreter': return pack.terms.azureLiveInterpreterDescription;
+    case 'azure-speech-translation': return pack.terms.azureSpeechTranslationDescription;
     case 'desktop-chrome-on-device-fast': return pack.terms.localFastDescription;
     case 'desktop-chrome-on-device-stable': return pack.terms.localStableDescription;
     case 'desktop-webspeech-gemini-stable': return pack.terms.desktopGeminiDescription;
     case 'desktop-webspeech-azure-stable': return pack.terms.desktopAzureDescription;
+    case 'mobile-dictation-bergamot': return pack.terms.mobileBergamotDescription;
     case 'mobile-dictation-gemini': return pack.terms.mobileGeminiDescription;
     case 'mobile-dictation-azure': return pack.terms.mobileAzureDescription;
   }
@@ -846,9 +930,12 @@ const profileDescription = (id: WorkflowProfileId, pack: LocalePack): string => 
 const providerForProfile = (id: WorkflowProfileId): string => {
   if (id === 'gemini-3.5-live-translate-preview') return 'Gemini Live';
   if (id === 'gpt-realtime-translate') return 'OpenAI Realtime';
+  if (id === 'azure-speech-live-interpreter') return 'Azure Speech Live Interpreter';
+  if (id === 'azure-speech-translation') return 'Azure Speech Translation';
   if (id === 'desktop-chrome-on-device-fast' || id === 'desktop-chrome-on-device-stable') {
     return 'Chrome Translator';
   }
+  if (id === 'mobile-dictation-bergamot') return 'Bergamot';
   if (id === 'desktop-webspeech-azure-stable' || id === 'mobile-dictation-azure') {
     return 'Azure AI Translator';
   }
@@ -924,11 +1011,15 @@ const localizedRequirements = (profile: WorkflowProfile, pack: LocalePack): read
     case 'auto': return [r.completeFlow, r.dictationIsInput];
     case 'gemini-3.5-live-translate-preview': return [r.geminiKey, r.microphone, r.secure, r.websocketAudio];
     case 'gpt-realtime-translate': return [r.openAiKey, r.microphone, r.secure, r.webrtc];
+    case 'azure-speech-live-interpreter':
+    case 'azure-speech-translation':
+      return [r.azureSpeechKey, r.microphone, r.secure, r.websocketAudio];
     case 'desktop-chrome-on-device-fast':
     case 'desktop-chrome-on-device-stable':
       return [r.desktopChrome, r.webSpeech, r.chromeTranslator, r.deviceVoice];
     case 'desktop-webspeech-gemini-stable': return [r.desktopWebSpeech, r.geminiKey, r.network, r.deviceVoice];
     case 'desktop-webspeech-azure-stable': return [r.desktopWebSpeech, r.azureKey, r.network, r.deviceVoice];
+    case 'mobile-dictation-bergamot': return [r.mobileKeyboard, r.startKeyboardDictation, r.bergamot, r.deviceVoice];
     case 'mobile-dictation-gemini': return [r.mobileKeyboard, r.startKeyboardDictation, r.geminiKey, r.network, r.deviceVoice];
     case 'mobile-dictation-azure': return [r.mobileKeyboard, r.startKeyboardDictation, r.azureKey, r.network, r.deviceVoice];
   }
@@ -958,6 +1049,7 @@ const localizedDisabledReason = (
   if (state.missingCredential === 'gemini') reasons.push(pack.disabled.geminiKey);
   if (state.missingCredential === 'openai') reasons.push(pack.disabled.openAiKey);
   if (state.missingCredential === 'azure') reasons.push(pack.disabled.azureKey);
+  if (state.missingCredential === 'azureSpeech') reasons.push(pack.disabled.azureSpeechKey);
   if (reasons.length > 0) return reasons.join(' ');
 
   const originalReason = state.disabledReason?.toLowerCase() ?? '';

@@ -18,11 +18,17 @@ export interface LiveSocketCallbacks {
   onError?: (error: string) => void;
 }
 
+export interface LiveStartOptions {
+  region?: string;
+  resourceName?: string;
+}
+
 export interface LiveTranslationService {
   start(
     apiKey: string,
     sourceLanguageCode: string,
-    targetLanguageCode: string
+    targetLanguageCode: string,
+    options?: LiveStartOptions
   ): Promise<void>;
   stop(): Promise<void>;
   dispose(): void;
@@ -30,11 +36,13 @@ export interface LiveTranslationService {
 
 export type SoundFirstModelId =
   | 'gemini-3.5-live-translate-preview'
-  | 'gpt-realtime-translate';
+  | 'gpt-realtime-translate'
+  | 'azure-speech-live-interpreter'
+  | 'azure-speech-translation';
 
 export interface SoundFirstModelOption {
   id: SoundFirstModelId;
-  provider: 'gemini' | 'openai';
+  provider: 'gemini' | 'openai' | 'azure';
   label: string;
   shortLabel: string;
   transcriptTag: string;
@@ -54,6 +62,20 @@ export const SOUND_FIRST_MODELS: readonly SoundFirstModelOption[] = [
     label: 'OpenAI GPT Realtime Translate',
     shortLabel: 'GPT Realtime',
     transcriptTag: 'OpenAI GPT Realtime Translate',
+  },
+  {
+    id: 'azure-speech-live-interpreter',
+    provider: 'azure',
+    label: 'Azure Speech Live Interpreter',
+    shortLabel: 'Azure Interpreter',
+    transcriptTag: 'Azure Speech Live Interpreter',
+  },
+  {
+    id: 'azure-speech-translation',
+    provider: 'azure',
+    label: 'Azure Speech Translation',
+    shortLabel: 'Azure Speech',
+    transcriptTag: 'Azure Speech Translation',
   },
 ] as const;
 
